@@ -1,17 +1,20 @@
 use crate::vec::f32x3;
-use crate::math;
+use crate::shapes::ShapeType;
 
 
 pub struct LightSample {
     pub intensity: f32x3,
     pub position: f32x3,
     pub wi: f32x3,
-    pub pdf: f32,
+    pub pdfa: f32,
+    pub cos_theta: f32,
+    pub delta_distribution: bool,
+    pub valid: bool,
 }
 
 impl LightSample {
-    pub fn new(intensity: f32x3, position: f32x3, wi: f32x3, pdf: f32) -> Self {
-        Self{intensity, position, wi, pdf}
+    pub fn new(intensity: f32x3, position: f32x3, wi: f32x3, pdfa: f32, cos_theta: f32, delta_distribution: bool, valid: bool) -> Self {
+        Self {intensity, position, wi, pdfa, cos_theta, delta_distribution, valid}
     }
 }
 
@@ -25,24 +28,28 @@ impl PointLight {
         Self{position, intensity}
     }
 
-    pub fn sample_li(&self, _normal: f32x3, point: f32x3) -> LightSample {
+    pub fn sample_li(&self, point: f32x3) -> LightSample {
         let wi = (self.position - point).normalize();
-        let pdf = 1.0f32;
-        let dst_sqr = math::distance_sqr(self.position, point);
-        let intensity = self.intensity.div(f32x3(dst_sqr, dst_sqr, dst_sqr));
-        LightSample::new(intensity, self.position, wi, pdf)
+        let pdfa = 1.0f32;
+        let cos_theta = 1.0f32;
+        let intensity = self.intensity;
+        LightSample::new(intensity, self.position, wi, pdfa, cos_theta, true, true)
+    }
+}
+
+pub struct AreaLight {
+    pub shape_type: ShapeType,
+    pub shape_id: u32,
+    pub intensity: f32x3,
+}
+
+impl AreaLight {
+    pub fn new(shape_type: ShapeType, shape_id: u32, intensity: f32x3) -> Self {
+        Self {shape_type, shape_id, intensity}
     }
 }
 
 pub enum Light {
-    Point(PointLight)
-}
-
-impl Light {
-    pub fn sample_li(&self, normal: f32x3, point: f32x3) -> LightSample {
-        match self {
-            Light::Point(point_light) => point_light.sample_li(normal, point),
-        }
-
-    }
+    Point(PointLight),
+    Area(AreaLight)
 }

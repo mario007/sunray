@@ -72,6 +72,12 @@ impl From<f64x3> for f32x3 {
     }
 }
 
+impl From<f32> for f32x3 {
+    fn from(src: f32) -> f32x3 {
+        f32x3(src, src, src)
+    }
+}
+
 impl f32x3 {
 
     pub fn dot(self: f32x3, v2: f32x3) -> f32 {

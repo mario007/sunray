@@ -114,6 +114,13 @@ impl PathSampler {
             PathSampler::Sobol(sobol) => sobol.sample_pixel(x, y, rendering_pass),
         }
     }
+
+    pub fn next_1d(&mut self) -> f32 {
+        match self {
+            PathSampler::Uniform(uniform) => uniform.next_1d(),
+            PathSampler::Sobol(sobol) => sobol.next_1d(),
+        }
+    }
 }
 
 

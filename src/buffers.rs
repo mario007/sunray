@@ -50,9 +50,9 @@ fn tone_map(tmo_type: &TMOType, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
         TMOType::Linear => (r, g, b),
         TMOType::Gamma => (r.powf(1.0/2.2), g.powf(1.0/2.2), b.powf(1.0/2.2)),
         TMOType::Reinhard => {
-            ((r / (r + 1.0)).powf(1.0/2.0),
-            (g / (g + 1.0)).powf(1.0/2.0),
-            (b / (b + 1.0)).powf(1.0/2.0))
+            ((r / (r + 1.0)).powf(1.0/2.2),
+            (g / (g + 1.0)).powf(1.0/2.2),
+            (b / (b + 1.0)).powf(1.0/2.2))
         }
     }
 }

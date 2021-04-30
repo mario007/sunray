@@ -156,14 +156,16 @@ impl Matrix4x4 {
         let right = up.normalize().cross(dir).normalize();
         let new_up = dir.cross(right);
 
-        Matrix4x4 {
+        let mat = Matrix4x4 {
             m: [
                 [right.0,   new_up.0,   dir.0,  pos.0],
                 [right.1,   new_up.1,   dir.1,  pos.1],
                 [right.2,   new_up.2,   dir.2,  pos.2],
                 [0.0,       0.0,        0.0,    1.0]
             ]
-        }
+        };
+        // Note: we are returning WorldToCamera matrix
+        mat.inverse()
     }
 
     pub fn perspective(fov: f32, near: f32, far: f32) -> Matrix4x4 {

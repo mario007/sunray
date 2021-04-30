@@ -110,7 +110,7 @@ impl PerspectiveCamera {
     pub fn generate_ray(&self, x: f32, y: f32) -> Ray {
         // TODO depth of field
         let camera_dir = self.raster_to_camera.transform_point(f32x3(x, y, 0.0)).normalize();
-        let camera_pos = f32x3(0.0, 0.0, 0.0);
+        let camera_pos = f32x3::from(0.0);
 
         let dir = self.base.camera_to_world.transform_vector(camera_dir).normalize();
         let pos = self.base.camera_to_world.transform_point(camera_pos);

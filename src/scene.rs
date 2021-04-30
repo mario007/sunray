@@ -4,7 +4,7 @@ use crate::matrix::Matrix4x4;
 use crate::camera::{Camera, PerspectiveCamera};
 use crate::sampler::SamplerType;
 use crate::buffers::ColorBuffer;
-use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh};
+use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
 use crate::materials::Material;
 use crate::lights::Light;
 use crate::scene_data::SceneData;
@@ -13,6 +13,7 @@ use crate::scene_data::SceneData;
 pub enum IntegratorType {
     Isect,
     DirectLighting,
+    PathTracer,
 }
 
 pub struct SceneOptions {
@@ -92,24 +93,24 @@ impl Scene {
         // for object instance approach
     }
 
-    pub fn add_sphere(&mut self, sphere: ShapeInstance<Sphere>) {
+    pub fn add_sphere(&mut self, sphere: ShapeInstance<Sphere>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        data.add_sphere(sphere);
+        return data.add_sphere(sphere);
     }
 
-    pub fn add_transformd_sphere(&mut self, sphere: ShapeInstance<TransformShape<Sphere>>) {
+    pub fn add_transformd_sphere(&mut self, sphere: ShapeInstance<TransformShape<Sphere>>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        data.add_transformed_sphere(sphere);
+        return data.add_transformed_sphere(sphere);
     }
 
-    pub fn add_mesh(&mut self, mesh: ShapeInstance<Mesh>) {
+    pub fn add_mesh(&mut self, mesh: ShapeInstance<Mesh>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        data.add_mesh(mesh);
+        return data.add_mesh(mesh);
     }
 
-    pub fn add_transformed_mesh(&mut self, mesh: ShapeInstance<TransformShape<Mesh>>) {
+    pub fn add_transformed_mesh(&mut self, mesh: ShapeInstance<TransformShape<Mesh>>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        data.add_transformed_mesh(mesh);
+        return data.add_transformed_mesh(mesh);
     }
 
     pub fn add_material(&mut self, mat: Material) -> u32 {
@@ -120,6 +121,11 @@ impl Scene {
     pub fn add_light(&mut self, light: Light) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
         data.add_light(light)
+    }
+
+    pub fn set_area_light(&mut self, shape_type: &ShapeType, shape_id: u32, light_id: i32) {
+        let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
+        data.set_area_light(shape_type, shape_id, light_id);
     }
 
     pub fn prepare(&mut self) {

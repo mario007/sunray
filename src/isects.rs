@@ -2,19 +2,6 @@ use crate::vec::{f32x3, f64x3};
 use crate::ray::Ray;
 
 
-pub struct IsectPoint {
-    pub position: f32x3,
-    pub normal: f32x3,
-    pub t: f32,
-    pub material_id: u32,
-}
-
-impl IsectPoint {
-    pub fn new(position: f32x3, normal: f32x3, t: f32, material_id: u32) -> Self {
-        Self {position, normal, t, material_id}
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct AABB {
     pub min_p: f32x3,
@@ -56,7 +43,7 @@ pub trait PrimitiveIntersect {
 }
 
 pub trait CalculateNormal {
-    fn calculate_normal(&self, hitpoint: f32x3, ray: &Ray, sub_shape: i32) -> f32x3;
+    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: i32) -> f32x3;
 }
 
 pub trait LinearIntersect : NPrimitives + BBoxPrimitive + PrimitiveIntersect {

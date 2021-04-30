@@ -5,12 +5,13 @@ use crate::matrix::Matrix4x4;
 use crate::ray::Ray;
 use crate::isects;
 use crate::isects::{CollectionIntersect, NPrimitives, BBoxPrimitive, PrimitiveIntersect,
-    LinearIntersect, ShapeIntersect, IsectPoint, CalculateNormal, Precompute};
+    LinearIntersect, ShapeIntersect, CalculateNormal, Precompute};
 use crate::isects::{AABB, BBox};
 use crate::grid::{UniGrid, UniGridBuild};
 use crate::grid;
 use crate::math;
 use crate::ply_reader::PlyModel;
+use crate::sampling;
 
 
 pub struct Sphere {
@@ -44,7 +45,7 @@ impl ShapeIntersect for Sphere {
 }
 
 impl CalculateNormal for Sphere {
-    fn calculate_normal(&self, hitpoint: f32x3, _ray: &Ray, _sub_shape: i32) -> f32x3 {
+    fn calculate_normal(&self, hitpoint: f32x3, _sub_shape: i32) -> f32x3 {
         (hitpoint - self.position).normalize()
     }
 }
@@ -106,7 +107,30 @@ impl Mesh {
         let (v1, v2, v3) = self.get_vertices(index);
         (v2 - v1).cross(v3 - v1).normalize()
     }
+
+    pub fn generate_position(&self, u1: f32, u2: f32, u3: f32) -> f32x3 {
+        let ntriangles = self.indices.len();
+        let triangle_idx = u1 * ntriangles as f32;
+        let triangle_idx = (triangle_idx as usize).min(ntriangles - 1);
+        let (u, v, w) = sampling::uniform_sampling_triangle(u2, u3);
+        let (v1, v2, v3) = self.get_vertices(triangle_idx);
+        u * v1 + v * v2 + w * v3
+    }
 }
+
+pub fn triangle_pdf(v1: f32x3, v2: f32x3, v3: f32x3) -> f32 {
+    let v = (v2 - v1).cross(v3 - v1);
+    let length = (v.0 * v.0 + v.1 * v.1 + v.2 * v.2).sqrt();
+    let area = 0.5 * length;
+    1.0 / area
+}
+
+pub fn triangle_pos_and_pdf(v1: f32x3, v2: f32x3, v3: f32x3, u1: f32, u2: f32) -> (f32x3, f32) {
+    let (u, v, w) = sampling::uniform_sampling_triangle(u1, u2);
+    let point = u * v1 + v * v2 + w * v3;
+    (point, triangle_pdf(v1, v2, v3))
+}
+
 
 impl Precompute for Mesh {
     fn precompute(&mut self) {
@@ -147,7 +171,7 @@ impl ShapeIntersect for Mesh {
 }
 
 impl CalculateNormal for Mesh {
-    fn calculate_normal(&self, _hitpoint: f32x3, _ray: &Ray, sub_shape: i32) -> f32x3 {
+    fn calculate_normal(&self, _hitpoint: f32x3, sub_shape: i32) -> f32x3 {
         // TODO ih we have vertex normals use them
         let (v1, v2, v3) = self.get_vertices(sub_shape as usize);
         (v2 - v1).cross(v3 - v1).normalize()
@@ -164,7 +188,7 @@ impl UniGridBuild for Mesh {}
 
 impl PrimitiveIntersect for Mesh {
     fn primitive_intersect(&self, index: usize, ray: &Ray, min_dist: f32) -> (f32, i32) {
-        let (v0, v1, v2) = self.get_vertices(index as usize);
+        let (v0, v1, v2) = self.get_vertices(index);
         let t = isects::ray_triangle_isect(f64x3::from(v0), f64x3::from(v1), f64x3::from(v2),
                                            f64x3::from(ray.origin), f64x3::from(ray.direction));
         if t > min_dist as f64 {
@@ -215,9 +239,9 @@ impl PlyModel for Mesh {
 }
 
 pub struct TransformShape<T> {
-    shape: T,
-    obj_to_world: Matrix4x4,
-    world_to_obj: Matrix4x4,
+    pub shape: T,
+    pub obj_to_world: Matrix4x4,
+    pub world_to_obj: Matrix4x4,
 }
 
 impl<T> TransformShape<T> {
@@ -261,11 +285,11 @@ impl<T: ShapeIntersect> ShapeIntersect for TransformShape<T> {
 
         let local_ray = Ray::new(origin, dir);
         let (t, sub_shape) = self.shape.intersect(&local_ray, local_min_dist);
-
-        if t > 0.0 {
+        if t > 0.0 && t < local_min_dist {
             let local_hit = origin + t * dir;
             let world_hit = self.obj_to_world.transform_point(local_hit);
             let world_t = math::distance(world_hit, ray.origin);
+            
             return (world_t, sub_shape);
         }
         (0.0, -1)
@@ -273,12 +297,9 @@ impl<T: ShapeIntersect> ShapeIntersect for TransformShape<T> {
 }
 
 impl<T: CalculateNormal> CalculateNormal for TransformShape<T> {
-    fn calculate_normal(&self, hitpoint: f32x3, ray: &Ray, sub_shape: i32) -> f32x3 {
+    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: i32) -> f32x3 {
         let local_p = self.world_to_obj.transform_point(hitpoint);
-        let origin = self.world_to_obj.transform_point(ray.origin);
-        let dir = self.world_to_obj.transform_vector(ray.direction).normalize();
-        let local_ray = Ray::new(origin, dir);
-        let normal = self.shape.calculate_normal(local_p, &local_ray, sub_shape);
+        let normal = self.shape.calculate_normal(local_p, sub_shape);
         matrix::transform_normal(&self.world_to_obj, normal).normalize()
     }
 }
@@ -295,11 +316,38 @@ impl<T> ShapeInstance<T> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ShapeType {
+    Sphere,
+    TransformSphere,
+    Mesh,
+    TransformMesh,
+    None,
+}
+
+pub struct IsectPoint {
+    pub position: f32x3,
+    pub normal: f32x3,
+    pub t: f32,
+    pub material_id: u32,
+    pub shape_type: ShapeType,
+    pub shape_id: usize,
+    pub sub_shape: i32,
+    pub light_id: i32,
+}
+
+impl IsectPoint {
+    pub fn new(position: f32x3, normal: f32x3, t: f32, material_id: u32, shape_type: ShapeType, shape_id: usize, sub_shape: i32, light_id: i32) -> Self {
+        Self {position, normal, t, material_id, shape_type, shape_id, sub_shape, light_id}
+    }
+}
+
 pub struct Shapes<T> {
-    shapes: Vec<ShapeInstance<T>>,
+    pub shapes: Vec<ShapeInstance<T>>,
     shapes_bbox: Vec<AABB>,
     grid: Option<UniGrid>,
     bbox: Option<AABB>,
+    area_lights_mapping: Vec<i32>,
 }
 
 impl<T> Shapes<T> {
@@ -309,24 +357,28 @@ impl<T> Shapes<T> {
             shapes_bbox: Vec::new(),
             grid: None,
             bbox: None,
+            area_lights_mapping: Vec::new(),
         }
     }
 
-    pub fn add_shape(&mut self, shape: ShapeInstance<T>) where T: BBox {
-
+    pub fn add_shape(&mut self, shape: ShapeInstance<T>) -> u32 where T: BBox {
+        let id = self.shapes.len();
         self.bbox = match self.bbox {
             Some(bbox) => Some(bbox.update(&shape.shape.bbox())),
             None => Some(shape.shape.bbox())
         };
         self.shapes_bbox.push(shape.shape.bbox());
         self.shapes.push(shape);
+        self.area_lights_mapping.push(-1);
+        id as u32
     }
 
-    pub fn generate_isect(&self, index: usize, ray: &Ray, min_dist: f32, sub_shape: i32) -> IsectPoint where T: CalculateNormal {
+    pub fn generate_isect(&self, index: usize, ray: &Ray, min_dist: f32, shape_type: ShapeType, sub_shape: i32) -> IsectPoint where T: CalculateNormal {
         let hitpoint = ray.origin + min_dist * ray.direction;
-        let normal = self.shapes[index].shape.calculate_normal(hitpoint, ray, sub_shape);
+        let normal = self.shapes[index].shape.calculate_normal(hitpoint, sub_shape);
         let material_id = *&self.shapes[index].material_id;
-        let isect_point = IsectPoint::new(hitpoint, normal, min_dist, material_id);
+        let light_id = self.area_lights_mapping[index];
+        let isect_point = IsectPoint::new(hitpoint, normal, min_dist, material_id, shape_type, index, sub_shape, light_id);
         return isect_point;
     }
 
@@ -342,6 +394,14 @@ impl<T> Shapes<T> {
         if self.shapes.len() > 4 {
             self.grid = Some(grid::create_uni_grid(self));
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.shapes.len()
+    }
+
+    pub fn set_area_light(&mut self, shape_id: u32, light_id: i32) {
+        self.area_lights_mapping[shape_id as usize] = light_id;
     }
 }
 

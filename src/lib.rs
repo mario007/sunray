@@ -17,6 +17,7 @@ mod math;
 mod ply_reader;
 mod grid;
 mod scene_data;
+mod sampling;
 
 use std::error::Error;
 use std::fs;
@@ -28,18 +29,24 @@ use std::path::{Path, PathBuf};
 use crate::matrix::Matrix4x4;
 use crate::sampler::SamplerType;
 use crate::materials::{Material, MatteMaterial};
-use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh};
+use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
 use crate::camera::{Camera, PerspectiveCamera};
-use crate::lights::{Light, PointLight};
+use crate::lights::{Light, PointLight, AreaLight};
 
 use crate::vec::f32x3;
 use crate::scene::{Scene, IntegratorType};
 
 
-pub struct ParseState {
+struct AreaLightInfo {
+    radiance: f32x3,
+    type_name: String,
+}
+
+struct ParseState {
     matrices: Vec<Matrix4x4>,
     general_section: bool,
     materials_ids: Vec<u32>,
+    area_lights_infos: Vec<AreaLightInfo>,
     path: PathBuf,
 }
 
@@ -49,6 +56,7 @@ impl ParseState {
             matrices: Vec::new(),
             general_section: true,
             materials_ids: Vec::new(),
+            area_lights_infos: Vec::new(),
             path: PathBuf::new(),
         }
     }
@@ -61,12 +69,25 @@ impl ParseState {
         self.materials_ids.push(material_id)
     }
 
+    pub fn push_area_light_info(&mut self) {
+        let info = AreaLightInfo{type_name: "".to_string(), radiance: f32x3(0.0, 0.0, 0.0)};
+        self.area_lights_infos.push(info);
+    }
+
     pub fn cur_matrix(&self) -> Matrix4x4 {
         self.matrices[self.matrices.len() - 1]
     }
 
     pub fn cur_material(&self) -> u32 {
         self.materials_ids[self.materials_ids.len() - 1]
+    }
+
+    pub fn cur_area_light_type(&self) -> &str {
+        &self.area_lights_infos[self.area_lights_infos.len() - 1].type_name
+    }
+
+    pub fn cur_area_light_radiance(&self) -> f32x3 {
+        self.area_lights_infos[self.area_lights_infos.len() - 1].radiance
     }
 
     pub fn set_matrix(&mut self, matrix: Matrix4x4) {
@@ -79,12 +100,22 @@ impl ParseState {
         self.materials_ids[index] = material_id;
     }
 
+    pub fn set_area_light_info(&mut self, type_name: String, radiance: f32x3) {
+        let index = self.area_lights_infos.len() - 1;
+        self.area_lights_infos[index].type_name = type_name;
+        self.area_lights_infos[index].radiance = radiance;
+    }
+
     pub fn pop_matrix(&mut self) {
         self.matrices.pop();
     }
 
     pub fn pop_material(&mut self) {
         self.materials_ids.pop();
+    }
+
+    pub fn pop_area_light_info(&mut self) {
+        self.area_lights_infos.pop();
     }
 
     pub fn in_general_section(&self) -> bool {
@@ -106,6 +137,7 @@ pub fn parse_input_file(filename: &String) -> Result<Scene, Box<dyn Error>> {
     let mut state = ParseState::new();
     state.push_matrix(Matrix4x4::identity());
     state.push_material(0);
+    state.push_area_light_info();
     let mut path = PathBuf::new();
     path.push(filename.to_string());
     state.set_path(path);
@@ -118,11 +150,11 @@ fn parse_input_string(text: &String, scene: &mut Scene, state: &mut ParseState) 
     let mut ct = PBRTTokenizer::new(text);
     let mut cur_directive = "";
     let all_directives: HashSet<_> = vec!["LookAt", "Camera", "Sampler", "Integrator", "Film", "PixelFilter",
-        "WorldBegin", "WorldEnd", "AttributeBegin", "AttributeEnd", "LightSource", "Texture", "Material",
-        "MakeNamedMaterial", "NamedMaterial", "Include", "Accelerator", "Shape",
+        "WorldBegin", "WorldEnd", "AttributeBegin", "AttributeEnd", "LightSource", "AreaLightSource", "Texture",
+        "Material", "MakeNamedMaterial", "NamedMaterial", "Include", "Accelerator", "Shape",
         "Scale", "Translate", "Rotate", "Identity", "Transform", "ConcatTransform"].into_iter().collect();
     let directives_to_process: HashSet<_> = vec!["LookAt", "Camera", "Sampler", "Integrator", "Film", "PixelFilter", 
-        "WorldBegin", "WorldEnd", "AttributeBegin", "AttributeEnd", "LightSource", "Texture",
+        "WorldBegin", "WorldEnd", "AttributeBegin", "AttributeEnd", "LightSource", "AreaLightSource", "Texture",
         "Material", "MakeNamedMaterial", "NamedMaterial", "Accelerator",
         "Scale", "Translate", "Rotate", "Identity", "Transform", "ConcatTransform"].into_iter().collect();
 
@@ -211,6 +243,7 @@ fn process_directive(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseS
         "AttributeBegin" => process_attribute_begin(tokens, scene, state)?,
         "AttributeEnd" => process_attribute_end(tokens, scene, state)?,
         "LightSource" => process_light_source(tokens, scene, state)?,
+        "AreaLightSource" => process_area_light_source(tokens, scene, state)?,
         "Texture" => process_texture(tokens, scene, state)?,
         "Material" => process_material(tokens, scene, state)?,
         "MakeNamedMaterial" => process_make_named_material(tokens, scene, state)?,
@@ -272,10 +305,12 @@ fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state:
 
     if state.cur_matrix().is_identity() {
         let mesh_inst = ShapeInstance::new(mesh, material_id);
-        scene.add_mesh(mesh_inst);
+        let id = scene.add_mesh(mesh_inst);
+        add_diffuse_area_light(ShapeType::Mesh, id, scene, state)?;
     } else {
         let tran_mesh = TransformShape::new(mesh, state.cur_matrix());
-        scene.add_transformed_mesh(ShapeInstance::new(tran_mesh, material_id));
+        let id = scene.add_transformed_mesh(ShapeInstance::new(tran_mesh, material_id));
+        add_diffuse_area_light(ShapeType::TransformMesh, id, scene, state)?;
     }
     
     Ok(next_directive)
@@ -327,10 +362,12 @@ fn process_shape_sphere(tokens: &Vec<String>, scene: &mut Scene, state: &ParseSt
     
     if state.cur_matrix().is_identity() {
         let sphere_inst = ShapeInstance::new(sphere, material_id);
-        scene.add_sphere(sphere_inst);
+        let id = scene.add_sphere(sphere_inst);
+        add_diffuse_area_light(ShapeType::Sphere, id, scene, state)?;
     } else {
         let tran_sphere = TransformShape::new(sphere, state.cur_matrix());
-        scene.add_transformd_sphere(ShapeInstance::new(tran_sphere, material_id));
+        let id = scene.add_transformd_sphere(ShapeInstance::new(tran_sphere, material_id));
+        add_diffuse_area_light(ShapeType::TransformSphere, id, scene, state)?;
     }
     Ok(())
 }
@@ -350,10 +387,13 @@ fn process_shape_plymesh(tokens: &Vec<String>, scene: &mut Scene, state: &ParseS
 
     if state.cur_matrix().is_identity() {
         let mesh_inst = ShapeInstance::new(mesh, material_id);
-        scene.add_mesh(mesh_inst);
+        let id = scene.add_mesh(mesh_inst);
+        add_diffuse_area_light(ShapeType::Mesh, id, scene, state)?;
+
     } else {
         let tran_mesh = TransformShape::new(mesh, state.cur_matrix());
-        scene.add_transformed_mesh(ShapeInstance::new(tran_mesh, material_id));
+        let id = scene.add_transformed_mesh(ShapeInstance::new(tran_mesh, material_id));
+        add_diffuse_area_light(ShapeType::TransformMesh, id, scene, state)?;
     }
     return result;
 }
@@ -377,7 +417,7 @@ fn process_look_at(tokens: &Vec<String>, _scene: &mut Scene, state: &mut ParseSt
     let look_at = parse_f32x3(&tokens[4], &tokens[5], &tokens[6], "LookAt:look_at ")?;
     let up = parse_f32x3(&tokens[7], &tokens[8], &tokens[9], "LookAt:up ")?;
     let matrix = state.cur_matrix() * Matrix4x4::look_at(eye, look_at, up);
-    state.set_matrix(matrix.inverse());
+    state.set_matrix(matrix);
     Ok(())
 }
 
@@ -409,8 +449,14 @@ fn process_integrator(tokens: &Vec<String>, scene: &mut Scene, state: &mut Parse
     match &tokens[1] as &str {
         "directlighting" => process_integrator_direct_lgt(tokens, scene, state)?,
         "intersector" => process_integrator_isect(tokens, scene, state)?,
+        "path" => process_integrator_path(tokens, scene, state)?,
         _=> return Err(format!("Unsupported integrator type {}", tokens[1]).to_string().into())
     }
+    Ok(())
+}
+
+fn process_integrator_path(_tokens: &Vec<String>, scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+    scene.set_integrator_type(IntegratorType::PathTracer);
     Ok(())
 }
 
@@ -471,12 +517,14 @@ fn process_world_end(_tokens: &Vec<String>, _scene: &Scene, _state: &ParseState)
 fn process_attribute_begin(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     state.push_matrix(state.cur_matrix());
     state.push_material(state.cur_material());
+    state.push_area_light_info();
     Ok(())
 }
 
 fn process_attribute_end(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     state.pop_matrix();
     state.pop_material();
+    state.pop_area_light_info();
     Ok(())
 }
 
@@ -487,6 +535,17 @@ fn process_light_source(tokens: &Vec<String>, scene: &mut Scene, state: &mut Par
     match &tokens[1] as &str {
         "point" => process_point_light(tokens, scene, state)?,
         _=> return Err(format!("Unsupported light type {}", tokens[1]).to_string().into())
+    }
+    Ok(())
+}
+
+fn process_area_light_source(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+    if tokens.len() < 2 {
+        return Err(format!("AreaLight: Type of area light not specified!").to_string().into())
+    }
+    match &tokens[1] as &str {
+        "diffuse" => process_diffuse_area_light(tokens, scene, state)?,
+        _=> return Err(format!("Unsupported area light type {}", tokens[1]).to_string().into())
     }
     Ok(())
 }
@@ -523,6 +582,21 @@ fn process_point_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut Pars
     let light_pos = matrix.transform_point(f32x3(0.0, 0.0, 0.0));
     let light = Light::Point(PointLight::new(light_pos, intensity));
     scene.add_light(light);
+    Ok(())
+}
+
+fn process_diffuse_area_light(tokens: &Vec<String>, _scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+    let radiance = find_spectrum("L", &tokens[2..], f32x3(1.0, 1.0, 1.0), "AreaLight:diffuse:L - ")?;
+    state.set_area_light_info("diffuse".to_string(), radiance);
+    Ok(())
+}
+
+fn add_diffuse_area_light(shape_type: ShapeType, shape_id: u32, scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
+    if state.cur_area_light_type() == "diffuse" {
+        let light = Light::Area(AreaLight::new(shape_type, shape_id, state.cur_area_light_radiance()));
+        let light_id = scene.add_light(light);
+        scene.set_area_light(&shape_type, shape_id, light_id as i32);
+    }
     Ok(())
 }
 
@@ -665,7 +739,7 @@ fn parse_f32x3(v0: &String, v1: &String, v2: &String, err_msg: &str) -> Result<f
 
 fn parse_f32(val: &str, err_msg: &str) ->Result<f32,  Box<dyn Error>> {
     let val: f32 = match val.trim().parse() {
-        Err(e) => return Err(format!("{} Parsing:{}", err_msg, e).to_string().into()),
+        Err(e) => return Err(format!("{} Parsing '{}':{}", err_msg, val, e).to_string().into()),
         Ok(val) => val
     };
     return Ok(val);   
@@ -673,7 +747,7 @@ fn parse_f32(val: &str, err_msg: &str) ->Result<f32,  Box<dyn Error>> {
 
 fn parse_u32(val: &str, err_msg: &str) ->Result<u32,  Box<dyn Error>> {
     let val: u32 = match val.trim().parse() {
-        Err(e) => return Err(format!("{} Parsing:{}", err_msg, e).to_string().into()),
+        Err(e) => return Err(format!("{} Parsing '{}':{}", err_msg, val, e).to_string().into()),
         Ok(val) => val
     };
     return Ok(val);   
@@ -777,7 +851,7 @@ fn find_offsets(text: &str) -> (usize, usize) {
             }
 
         } else {
-            if c == ' ' || c == ']' || c == '\n' {
+            if c == ' ' || c == ']' || c == '\n' || c == '\t' {
                 end_offset = index as i32;
                 break;
             }
@@ -793,6 +867,7 @@ impl<'a> Iterator for PBRTTokenizer<'a> {
         
         let (start, end) = find_offsets(self.text);
         if end > start {
+            // NOTE: we exclude quotes, if we have "float t" we return 'float t' without quotes
             if &self.text[start..start+1] == "\"" {
                 let result = Some(&self.text[start+1..end]);
                 self.text = &self.text[end+1..];
@@ -816,7 +891,7 @@ mod tests {
 
     #[test]
     fn pbrt_tokenizer() {
-        let text = " [ 0 0   1 0 \"pero fov\" 1 1   0 1 ]        \"5\"";
+        let text = " [ 0 0   1 0 \"pero fov\" 1 1   0 1 2.2\t3.3]        \"5\"";
         let toks = PBRTTokenizer::new(text);
         for tok in toks {
             println!("{}", tok);
