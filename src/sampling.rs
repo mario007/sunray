@@ -14,8 +14,8 @@ pub fn pdfa_to_w(pdfa: f32, dist: f32, cos_there: f32) -> f32 {
     pdfa * (dist * dist) / cos_there.abs()
 }
 
-pub fn cosine_hemi_pdf(cos_theta: f32) -> f32 {
-    cos_theta * f32::consts::FRAC_1_PI
+pub fn cosine_hemi_pdf(n_dot_wi: f32) -> f32 {
+    n_dot_wi * f32::consts::FRAC_1_PI
 }
 
 pub fn cosine_hemi_direction(normal: f32x3, u1: f32, u2: f32) -> f32x3 {

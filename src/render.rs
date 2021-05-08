@@ -66,7 +66,7 @@ pub fn render(scene: &mut Scene, rendering_pass: u32) {
                     let (xp, yp) = sampler.sample_pixel(x, y, rendering_pass);
                     let ray = camera.generate_ray(x as f32 + xp, y as f32 + yp);
                     let rad = match options.integrator_type {
-                        IntegratorType::DirectLighting => radiance_direct_lgt(&ray, &scene_data, &mut sampler, x, y),
+                        IntegratorType::DirectLighting => radiance_direct_lgt(&ray, &scene_data, &mut sampler),
                         IntegratorType::PathTracer => radiance_path_tracer(&ray, &scene_data, &mut sampler),
                         IntegratorType::Isect => radiance_isect(&ray, &scene_data, &mut sampler),
                     };
@@ -94,7 +94,7 @@ fn radiance_isect (ray: &Ray, scene_data: &SceneData, _path_sampler: &PathSample
     f32x3(1.0, 1.0, 1.0) * wo.dot(isect_p.normal).abs()
 }
 
-fn radiance_direct_lgt (ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler, x: u32, y: u32) -> f32x3 {
+fn radiance_direct_lgt (ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler) -> f32x3 {
     let isect_p = match scene_data.intersect(ray) {
         Some(isect_p) => isect_p,
         None => return f32x3(0.0, 0.0, 0.0)
@@ -151,6 +151,7 @@ fn radiance_path_tracer(ray: &Ray, scene_data: &SceneData, path_sampler: &mut Pa
         acum = acum + path_t.mul(make_explict_connection(scene_data, &isect_p, wo, path_sampler));
 
         let bs = scene_data.material_sample(isect_p.material_id, wo, isect_p.normal, path_sampler);
+        if !bs.valid { break; }
         cos_theta = bs.wi.dot(isect_p.normal).abs();
         path_t = path_t.mul(bs.value) * (cos_theta / bs.pdfw);
         last_pdfw = bs.pdfw;
@@ -195,7 +196,6 @@ fn make_explict_connection(scene_data: &SceneData, isect: &IsectPoint, wo: f32x3
     f32x3(0.0, 0.0, 0.0)
 }
 
-
 fn radiance_path_tracer2(ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler) -> f32x3 {
     let path_treshold = 0.001f32;
     let max_depth = 6;
@@ -220,6 +220,7 @@ fn radiance_path_tracer2(ray: &Ray, scene_data: &SceneData, path_sampler: &mut P
         acum = acum + path_t.mul(make_explict_connection2(scene_data, &isect_p, wo, path_sampler));
 
         let bs = scene_data.material_sample(isect_p.material_id, wo, isect_p.normal, path_sampler);
+        if !bs.valid { break; }
         let cos_theta = bs.wi.dot(isect_p.normal).abs();
         path_t = path_t.mul(bs.value) * (cos_theta / bs.pdfw);
 

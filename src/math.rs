@@ -30,3 +30,7 @@ pub fn frisvad_revised_onb(normal: f32x3) -> (f32x3, f32x3) {
         return (b1, b2);
     }
 }
+
+pub fn reflect(v: f32x3, normal: f32x3) -> f32x3 {
+    2.0 * v.dot(normal) * normal - v
+}

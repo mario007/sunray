@@ -18,17 +18,18 @@ mod ply_reader;
 mod grid;
 mod scene_data;
 mod sampling;
+mod bsdf;
 
 use std::error::Error;
 use std::fs;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::str::FromStr;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use crate::matrix::Matrix4x4;
 use crate::sampler::SamplerType;
-use crate::materials::{Material, MatteMaterial};
+use crate::materials::{Material, MatteMaterial, PhongMaterial};
 use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
 use crate::camera::{Camera, PerspectiveCamera};
 use crate::lights::{Light, PointLight, AreaLight};
@@ -48,30 +49,42 @@ struct ParseState {
     materials_ids: Vec<u32>,
     area_lights_infos: Vec<AreaLightInfo>,
     path: PathBuf,
+    named_materials: Vec<HashMap<String, u32>>,
 }
 
 impl ParseState {
     pub fn new() -> Self {
+
+        let mut matrices = Vec::new();
+        matrices.push(Matrix4x4::identity());
+        let mut materials_ids = Vec::new();
+        materials_ids.push(0);
+        let mut area_lights_infos = Vec::new();
+        let info = AreaLightInfo{type_name: "".to_string(), radiance: f32x3(0.0, 0.0, 0.0)};
+        area_lights_infos.push(info);
+        let mut named_materials = Vec::new();
+        named_materials.push(HashMap::new());
+
         Self {
-            matrices: Vec::new(),
+            matrices,
             general_section: true,
-            materials_ids: Vec::new(),
-            area_lights_infos: Vec::new(),
+            materials_ids,
+            area_lights_infos,
             path: PathBuf::new(),
+            named_materials,
         }
     }
 
-    pub fn push_matrix(&mut self, matrix: Matrix4x4) {
-        self.matrices.push(matrix);
-    }
-
-    pub fn push_material(&mut self, material_id: u32) {
-        self.materials_ids.push(material_id)
-    }
-
-    pub fn push_area_light_info(&mut self) {
+    pub fn push_state(&mut self) {
+        self.matrices.push(self.cur_matrix());
+        self.materials_ids.push(self.cur_material());
         let info = AreaLightInfo{type_name: "".to_string(), radiance: f32x3(0.0, 0.0, 0.0)};
         self.area_lights_infos.push(info);
+
+        // TODO - copy on write approach for performances reasons
+        let index = self.named_materials.len() - 1;
+        let map = self.named_materials[index].clone();
+        self.named_materials.push(map);
     }
 
     pub fn cur_matrix(&self) -> Matrix4x4 {
@@ -106,16 +119,11 @@ impl ParseState {
         self.area_lights_infos[index].radiance = radiance;
     }
 
-    pub fn pop_matrix(&mut self) {
+    pub fn pop_state(&mut self) {
         self.matrices.pop();
-    }
-
-    pub fn pop_material(&mut self) {
         self.materials_ids.pop();
-    }
-
-    pub fn pop_area_light_info(&mut self) {
         self.area_lights_infos.pop();
+        self.named_materials.pop();
     }
 
     pub fn in_general_section(&self) -> bool {
@@ -129,15 +137,25 @@ impl ParseState {
     pub fn set_path(&mut self, path: PathBuf) {
         self.path = path;
     }
+
+    pub fn add_named_material(&mut self, name: String, material_id: u32) {
+        let index = self.named_materials.len() - 1;
+        let map = &mut self.named_materials[index];
+        // Todo - logger - is material allready exist it will be redefined
+        map.insert(name, material_id);
+    }
+
+    pub fn get_named_material(&self, name: &str) -> u32 {
+        let index = self.named_materials.len() - 1;
+        let map = &self.named_materials[index];
+        *map.get(name).expect(format!("Material {} doesn't exist!", name).as_str())
+    }
 }
 
 pub fn parse_input_file(filename: &String) -> Result<Scene, Box<dyn Error>> {
     let contents = fs::read_to_string(filename)?;
     let mut scene = Scene::new();
     let mut state = ParseState::new();
-    state.push_matrix(Matrix4x4::identity());
-    state.push_material(0);
-    state.push_area_light_info();
     let mut path = PathBuf::new();
     path.push(filename.to_string());
     state.set_path(path);
@@ -515,16 +533,12 @@ fn process_world_end(_tokens: &Vec<String>, _scene: &Scene, _state: &ParseState)
 }
 
 fn process_attribute_begin(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
-    state.push_matrix(state.cur_matrix());
-    state.push_material(state.cur_material());
-    state.push_area_light_info();
+    state.push_state();
     Ok(())
 }
 
 fn process_attribute_end(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
-    state.pop_matrix();
-    state.pop_material();
-    state.pop_area_light_info();
+    state.pop_state();
     Ok(())
 }
 
@@ -558,18 +572,35 @@ fn process_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseSt
     if tokens.len() < 2 {
         return Err(format!("Material: Type of material not specified!").to_string().into())
     }
-    match &tokens[1] as &str {
-        "matte" => process_matte_material(tokens, scene, state)?,
-        _=> return Err(format!("Unsupported material type {}", tokens[1]).to_string().into())
+    return process_material_types(tokens, scene, state, &tokens[1] as &str, "");
+}
+
+fn process_make_named_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+    if tokens.len() < 4 {
+        return Err(format!("MakeNamedMaterial: At least 4 token required!").to_string().into())
     }
+    let mat_name = &tokens[1].to_string();
+    let mat_type = find_value("string type", tokens, "Unknown".to_string(), "MakeNamedMaterial:type - ")?;
+    // Note: Just to be sure we remove first two tokens (MakeNamedMaterial "material_name") because material_name can have same name as some material parameter
+    let tokens = Vec::from(&tokens[2..]);
+    return process_material_types(&tokens, scene, state, mat_type.as_str(), mat_name);
+}
+
+fn process_named_material(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+    if tokens.len() < 2 {
+        return Err(format!("NamedMaterial: At least 2 token required!").to_string().into())
+    }
+    let id = state.get_named_material(&tokens[1]);
+    state.set_material(id);
     Ok(())
 }
 
-fn process_make_named_material(_tokens: &Vec<String>, _scene: &Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
-    Ok(())
-}
-
-fn process_named_material(_tokens: &Vec<String>, _scene: &Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_material_types(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_type: &str, mat_name: &str) -> Result<(), Box<dyn Error>> {
+    match mat_type {
+        "matte" => process_matte_material(tokens, scene, state, mat_name)?,
+        "phong" => process_phong_material(tokens, scene, state, mat_name)?,
+        _=> return Err(format!("Unsupported material type {}", mat_type).to_string().into())
+    }
     Ok(())
 }
 
@@ -670,12 +701,31 @@ fn process_concat_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut Pa
     Ok(())
 }
 
-fn process_matte_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_matte_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
     let spec = find_spectrum("Kd", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:mate:Kd - ")?;
-    let mat = Material::Matte(MatteMaterial::new(spec));
+    let roughness = find_value("float sigma", &tokens[2..], 0.0, "Material:mate:sigma - ")?;
+    let mat = Material::Matte(MatteMaterial::new(spec, roughness));
     let id = scene.add_material(mat);
-    state.set_material(id);
+    add_material_to_state(id, mat_name, state);
     Ok(())
+}
+
+fn process_phong_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+    let kd = find_spectrum("Kd", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:phong:Kd - ")?;
+    let ks = find_spectrum("Ks", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:phong:Ks - ")?;
+    let shininess = find_value("float shininess", &tokens[2..], 10.0, "Material:mate:shininess - ")?;
+    let mat = Material::Phong(PhongMaterial::new(kd, ks, shininess));
+    let id = scene.add_material(mat);
+    add_material_to_state(id, mat_name, state);
+    Ok(())
+}
+
+fn add_material_to_state(material_id: u32, mat_name: &str, state: &mut ParseState) {
+    if mat_name != "" {
+        state.add_named_material(mat_name.to_string(), material_id);
+    } else {
+        state.set_material(material_id);
+    }
 }
 
 fn find_spectrum(pname: &str, tokens: &[String], default: f32x3, err_msg: &str) -> Result<f32x3, Box<dyn Error>> {
