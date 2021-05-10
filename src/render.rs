@@ -27,41 +27,22 @@ impl PixelValue {
     }
 }
 
-fn calc_rendering_blocks(y_res: u32, n_threads: u32) -> Vec<u32> {
-
-    let step_size = y_res / n_threads;
-    let mut cur_y: u32 = 0;
-    let mut y_values = vec![cur_y]; 
-
-    while cur_y < y_res {
-        cur_y += step_size;
-        if cur_y < y_res {
-            y_values.push(cur_y);
-        } else {
-            y_values.push(y_res);
-        }
-    }
-    return y_values;
-}
-
 pub fn render(scene: &mut Scene, rendering_pass: u32) {
 
     let n_threads = 16;
-    let rend_blocks = calc_rendering_blocks(scene.options.yres, n_threads);
     let (tx, rx) = mpsc::channel();
 
-    let mut prev_y_value = rend_blocks[0];
-    for cur_y_value in rend_blocks.iter().skip(1) {
-        let y_val = *cur_y_value;
+    for cur_y_value in 0..n_threads {
+        let start_y = cur_y_value;
         let t_sender = tx.clone();
         let options = Arc::clone(&scene.options);
         let camera = Arc::clone(&scene.camera);
         let scene_data = Arc::clone(&scene.scene_data);
+        let step = n_threads as usize;
         thread::spawn(move || {
-            let seed = y_val as u64 * 123456789 + 123456 * rendering_pass as u64;
+            let seed = start_y as u64 * 123456789 + 123456 * rendering_pass as u64;
             let mut sampler = PathSampler::new(options.sampler_type, options.xres, options.yres, options.n_samples, seed);
-            
-            for y in prev_y_value..y_val {
+            for y in (start_y..options.yres).step_by(step) {
                 for x in 0..options.xres {
                     let (xp, yp) = sampler.sample_pixel(x, y, rendering_pass);
                     let ray = camera.generate_ray(x as f32 + xp, y as f32 + yp);
@@ -75,7 +56,6 @@ pub fn render(scene: &mut Scene, rendering_pass: u32) {
                 }
             }
         });
-        prev_y_value = *cur_y_value;
     }
 
     drop(tx);

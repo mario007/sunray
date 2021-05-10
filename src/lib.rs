@@ -32,7 +32,7 @@ use crate::sampler::SamplerType;
 use crate::materials::{Material, MatteMaterial, PhongMaterial};
 use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
 use crate::camera::{Camera, PerspectiveCamera};
-use crate::lights::{Light, PointLight, AreaLight};
+use crate::lights::{Light, PointLight, AreaLight, DistantLight};
 
 use crate::vec::f32x3;
 use crate::scene::{Scene, IntegratorType};
@@ -548,6 +548,7 @@ fn process_light_source(tokens: &Vec<String>, scene: &mut Scene, state: &mut Par
     }
     match &tokens[1] as &str {
         "point" => process_point_light(tokens, scene, state)?,
+        "distant" => process_distant_light(tokens, scene, state)?,
         _=> return Err(format!("Unsupported light type {}", tokens[1]).to_string().into())
     }
     Ok(())
@@ -612,6 +613,26 @@ fn process_point_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut Pars
     let matrix = Matrix4x4::translate(position.0, position.1, position.2) * state.cur_matrix();
     let light_pos = matrix.transform_point(f32x3(0.0, 0.0, 0.0));
     let light = Light::Point(PointLight::new(light_pos, intensity));
+    scene.add_light(light);
+    Ok(())
+}
+
+fn process_distant_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+    let intensity = find_spectrum("L", &tokens[2..], f32x3(1.0, 1.0, 1.0), "Light:distant:L - ")?;
+    let scale = find_spectrum("scale", &tokens[2..], f32x3(1.0, 1.0, 1.0), "Light:distant:scale - ")?;
+    let intensity = intensity.mul(scale);
+
+    let point_from = find_f32x3("point from", &tokens[2..], f32x3(0.0, 0.0, 0.0), "Light:distant:from - ")?;
+    let point_to = find_f32x3("point to", &tokens[2..], f32x3(0.0, 0.0, 1.0), "Light:distant:to - ")?;
+
+    let matrix_from = Matrix4x4::translate(point_from.0, point_from.1, point_from.2) * state.cur_matrix();
+    let light_from = matrix_from.transform_point(f32x3(0.0, 0.0, 0.0));
+
+    let matrix_to = Matrix4x4::translate(point_to.0, point_to.1, point_to.2) * state.cur_matrix();
+    let light_to = matrix_to.transform_point(f32x3(0.0, 0.0, 0.0));
+
+    let wi_light = (light_from - light_to).normalize();
+    let light = Light::Distant(DistantLight::new(wi_light, intensity));
     scene.add_light(light);
     Ok(())
 }

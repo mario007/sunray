@@ -45,7 +45,7 @@ impl ShapeIntersect for Sphere {
 }
 
 impl CalculateNormal for Sphere {
-    fn calculate_normal(&self, hitpoint: f32x3, _sub_shape: i32) -> f32x3 {
+    fn calculate_normal(&self, hitpoint: f32x3, _sub_shape: usize) -> f32x3 {
         (hitpoint - self.position).normalize()
     }
 }
@@ -102,10 +102,12 @@ impl Mesh {
         (v1, v2, v3)
     }
 
-    pub fn normal(&self, index: usize) -> f32x3 {
-        // TODO ih we have vertex normals use them
-        let (v1, v2, v3) = self.get_vertices(index);
-        (v2 - v1).cross(v3 - v1).normalize()
+    pub fn get_normals(&self, index: usize) -> (f32x3, f32x3, f32x3) {
+        let indices = self.indices[index];
+        let n1 = self.vertex_normals[indices.0 as usize];
+        let n2 = self.vertex_normals[indices.1 as usize];
+        let n3 = self.vertex_normals[indices.2 as usize];
+        (n1, n2, n3)
     }
 
     pub fn generate_position(&self, u1: f32, u2: f32, u3: f32) -> f32x3 {
@@ -171,10 +173,15 @@ impl ShapeIntersect for Mesh {
 }
 
 impl CalculateNormal for Mesh {
-    fn calculate_normal(&self, _hitpoint: f32x3, sub_shape: i32) -> f32x3 {
-        // TODO ih we have vertex normals use them
-        let (v1, v2, v3) = self.get_vertices(sub_shape as usize);
-        (v2 - v1).cross(v3 - v1).normalize()
+    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: usize) -> f32x3 {
+        let (v1, v2, v3) = self.get_vertices(sub_shape);
+        if self.vertex_normals.len() > 0 {
+            let (u, v, w) = math::barycentric(hitpoint, v1, v2, v3);
+            let (n1, n2, n3) = self.get_normals(sub_shape);
+            return (u * n1 + v * n2 + w * n3).normalize();
+        } else { 
+            return (v2 - v1).cross(v3 - v1).normalize();
+        }
     }
 }
 
@@ -297,13 +304,12 @@ impl<T: ShapeIntersect> ShapeIntersect for TransformShape<T> {
 }
 
 impl<T: CalculateNormal> CalculateNormal for TransformShape<T> {
-    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: i32) -> f32x3 {
+    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: usize) -> f32x3 {
         let local_p = self.world_to_obj.transform_point(hitpoint);
         let normal = self.shape.calculate_normal(local_p, sub_shape);
         matrix::transform_normal(&self.world_to_obj, normal).normalize()
     }
 }
-
 
 pub struct ShapeInstance<T> {
     pub shape: T,
@@ -375,7 +381,7 @@ impl<T> Shapes<T> {
 
     pub fn generate_isect(&self, index: usize, ray: &Ray, min_dist: f32, shape_type: ShapeType, sub_shape: i32) -> IsectPoint where T: CalculateNormal {
         let hitpoint = ray.origin + min_dist * ray.direction;
-        let normal = self.shapes[index].shape.calculate_normal(hitpoint, sub_shape);
+        let normal = self.shapes[index].shape.calculate_normal(hitpoint, sub_shape as usize);
         let material_id = *&self.shapes[index].material_id;
         let light_id = self.area_lights_mapping[index];
         let isect_point = IsectPoint::new(hitpoint, normal, min_dist, material_id, shape_type, index, sub_shape, light_id);

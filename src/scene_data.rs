@@ -1,7 +1,7 @@
 use crate::vec::f32x3;
 use crate::shapes::{Sphere, Shapes, ShapeInstance, TransformShape, Mesh, ShapeType, IsectPoint, triangle_pos_and_pdf, triangle_pdf};
 use crate::materials::{Material, MaterialSample};
-use crate::isects::{CollectionIntersect, NPrimitives, CalculateNormal};
+use crate::isects::{CollectionIntersect, NPrimitives, CalculateNormal, AABB, BBox};
 use crate::ray::Ray;
 use crate::lights::{Light, LightSample};
 use crate::math;
@@ -86,6 +86,23 @@ impl SceneData {
         self.tran_spheres.precompute();
         self.meshes.precompute();
         self.tran_meshes.precompute();
+
+        let mut world_bound = AABB::new(f32x3::from(1e30), f32x3::from(-1e30));
+        if self.spheres.len() > 0 {
+            world_bound = world_bound.update(&self.spheres.bbox());
+        }
+        if self.tran_spheres.len() > 0 {
+            world_bound = world_bound.update(&self.tran_spheres.bbox());
+        }
+        if self.meshes.len() > 0 {
+            world_bound = world_bound.update(&self.meshes.bbox());
+        }
+        if self.tran_meshes.len() > 0 {
+            world_bound = world_bound.update(&self.tran_meshes.bbox());
+        }
+        for light in &mut self.lights {
+           light.precompute(&world_bound)
+        }
     }
 
     pub fn intersect_t(&self, ray: &Ray, min_dist: f32) -> (i32, i32, f32, ShapeType) {
@@ -159,6 +176,7 @@ impl SceneData {
         let dist = math::distance(point1, point2) - eps;
         let direction = (point2 - point1).normalize();
         let ray = Ray::new(point1, direction);
+        // TODO: early return
         let (shape_idx, _triangle_idx, _min_dist, _shape_type) = self.intersect_t(&ray, dist);
         shape_idx == -1
     }
@@ -167,6 +185,7 @@ impl SceneData {
         let light = &self.lights[light_id];
         match light {
             Light::Point(point_light) => point_light.sample_li(isect.position),
+            Light::Distant(distant) => distant.sample_li(isect.position),
             Light::Area(area_light) => {
                 let ss = self.sample_shape(isect.position, &area_light.shape_type, area_light.shape_id, path_sampler);
                 LightSample::new(area_light.intensity, ss.position, ss.wi, ss.pdfa, ss.cos_theta, false, ss.valid)
@@ -178,6 +197,7 @@ impl SceneData {
         let light = &self.lights[isect.light_id as usize];
         match light {
             Light::Point(_) => LightSample::new(f32x3(0.0, 0.0, 0.0), isect.position, direction_to_light, 0.0, 1.0, true, false),
+            Light::Distant(_) => LightSample::new(f32x3(0.0, 0.0, 0.0), isect.position, direction_to_light, 0.0, 1.0, true, false),
             Light::Area(area_light) => {
                 let cos_theta = isect.normal.dot(-direction_to_light);
                 let mut valid = true;
@@ -202,7 +222,7 @@ impl SceneData {
                 let (v1, v2, v3) = mesh.get_vertices(triangle_idx);
                 let (position, pdf) = triangle_pos_and_pdf(v1, v2, v3, path_sampler.next_1d(), path_sampler.next_1d());
                 let wi = (position - hitpoint).normalize();
-                let normal = mesh.normal(triangle_idx);
+                let normal = mesh.calculate_normal(position, triangle_idx);
                 let cos_theta = normal.dot(-wi);
                 let mut valid = true;
                 if cos_theta < 0.0 { valid = false; }
@@ -218,7 +238,7 @@ impl SceneData {
                 let v3 = tran_mesh.obj_to_world.transform_point(v3);
                 let (position, pdf) = triangle_pos_and_pdf(v1, v2, v3, path_sampler.next_1d(), path_sampler.next_1d());
                 let wi = (position - hitpoint).normalize();
-                let normal = tran_mesh.calculate_normal(position, triangle_idx as i32);
+                let normal = tran_mesh.calculate_normal(position, triangle_idx);
                 let cos_theta = normal.dot(-wi);
                 let mut valid = true;
                 if cos_theta < 0.0 { valid = false; }

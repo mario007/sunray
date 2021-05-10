@@ -43,7 +43,7 @@ pub trait PrimitiveIntersect {
 }
 
 pub trait CalculateNormal {
-    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: i32) -> f32x3;
+    fn calculate_normal(&self, hitpoint: f32x3, sub_shape: usize) -> f32x3;
 }
 
 pub trait LinearIntersect : NPrimitives + BBoxPrimitive + PrimitiveIntersect {
