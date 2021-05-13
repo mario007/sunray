@@ -37,5 +37,5 @@ fn main() {
     }
     let rendering_time = stop_watch.elapsed();
     println!("Rendering time: {} seconds", rendering_time.as_secs_f64());
-    scene.color_buffer.to_rgb(TMOType::Gamma).save(&scene.output_filename).unwrap();
+    scene.color_buffer.save(&scene.output_filename, TMOType::Gamma).unwrap();
 }

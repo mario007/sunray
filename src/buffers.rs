@@ -1,5 +1,9 @@
 extern crate image;
 use std::path::Path;
+use std::error::Error;
+use std::fs::File;
+use std::io::BufWriter;
+use std::io::Write;
 
 
 pub struct ColorBufferRGB {
@@ -28,12 +32,16 @@ impl ColorBufferRGB {
         self.pixels[index + 2] = b;
     }
 
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> image::error::ImageResult<()> {
-        image::save_buffer(path,
-                           &self.pixels[0..self.pixels.len()],
-                           self.width as u32,
-                           self.height as u32,
-                           image::ColorType::Rgb8)
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn Error>> {
+        let result = image::save_buffer(path,
+                                        &self.pixels[0..self.pixels.len()],
+                                        self.width as u32,
+                                        self.height as u32,
+                                        image::ColorType::Rgb8);
+        match result {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
@@ -104,5 +112,39 @@ impl ColorBuffer {
             }
         }
         return buf;
+    }
+
+    pub fn save<P: AsRef<Path>>(&self, path: P, tmo_type: TMOType) -> Result<(), Box<dyn Error>> {
+        let ext = Path::new(path.as_ref()).extension();
+        match ext {
+            None => Err(format!("There is no filename or embedded .").to_string().into()),
+            Some(os_str) => match os_str.to_str() {
+                Some("pfm") => self.save_as_pfm(path),
+                Some("hdr") => self.save_as_hdr(path),
+                _ => self.to_rgb(tmo_type).save(path),
+            }
+        }
+    }
+
+    fn save_as_pfm<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn Error>> {
+
+        let file = File::create(&path)?;
+        let mut buf_writer = BufWriter::new(file);
+        let _result = buf_writer.write_all(b"PF\n");
+        let _result = buf_writer.write_fmt(format_args!("{} {}\n", self.width, self.height));
+        let _result = buf_writer.write_all(b"-1\n");
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let (r, g, b, _weight) = self.get_color(x, self.height - y - 1);
+                    let _result = buf_writer.write_all(&f32::to_le_bytes(r));
+                    let _result = buf_writer.write_all(&f32::to_le_bytes(g));
+                    let _result = buf_writer.write_all(&f32::to_le_bytes(b));
+            }
+        }
+        Ok(())
+    }
+
+    fn save_as_hdr<P: AsRef<Path>>(&self, _path: P) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 }
