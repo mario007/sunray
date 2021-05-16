@@ -64,7 +64,7 @@ pub fn render(scene: &mut Scene, rendering_pass: u32) {
     }
 }
 
-fn radiance_isect (ray: &Ray, scene_data: &SceneData, _path_sampler: &PathSampler) -> f32x3 {
+pub fn radiance_isect (ray: &Ray, scene_data: &SceneData, _path_sampler: &PathSampler) -> f32x3 {
 
     let isect_p = match scene_data.intersect(ray) {
         Some(isect_p) => isect_p,
@@ -74,7 +74,7 @@ fn radiance_isect (ray: &Ray, scene_data: &SceneData, _path_sampler: &PathSample
     f32x3(1.0, 1.0, 1.0) * wo.dot(isect_p.normal).abs()
 }
 
-fn radiance_direct_lgt (ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler) -> f32x3 {
+pub fn radiance_direct_lgt (ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler) -> f32x3 {
     let isect_p = match scene_data.intersect(ray) {
         Some(isect_p) => isect_p,
         None => return f32x3(0.0, 0.0, 0.0)
@@ -100,7 +100,7 @@ fn radiance_direct_lgt (ray: &Ray, scene_data: &SceneData, path_sampler: &mut Pa
     acum
 }
 
-fn radiance_path_tracer(ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler) -> f32x3 {
+pub fn radiance_path_tracer(ray: &Ray, scene_data: &SceneData, path_sampler: &mut PathSampler) -> f32x3 {
     let path_treshold = 0.001f32;
     let max_depth = 10;
     

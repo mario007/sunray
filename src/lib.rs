@@ -19,6 +19,7 @@ mod grid;
 mod scene_data;
 mod sampling;
 mod bsdf;
+pub mod renderer;
 
 use std::error::Error;
 use std::fs;

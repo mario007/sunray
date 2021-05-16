@@ -79,9 +79,18 @@ impl ColorBuffer {
         }
     }
 
-    pub fn get_color(&self, x: usize, y:usize) -> (f32, f32, f32, f32) {
+    pub fn get_color(&self, x: usize, y:usize) -> (f32, f32, f32) {
         let index = y * self.width * 4 + x * 4;
-        (self.pixels[index], self.pixels[index+1], self.pixels[index+2], self.pixels[index+3])
+        let r = self.pixels[index];
+        let g = self.pixels[index+1];
+        let b = self.pixels[index+2];
+        let weight = self.pixels[index+3];
+        if weight > 0.0 {
+            let factor = 1.0 / weight;
+            (r * factor, g * factor, b * factor)
+        } else {
+            (r, g, b)
+        }
     }
 
     pub fn add_color(&mut self, x: usize, y:usize, r: f32, g: f32, b: f32, weight: f32) {
@@ -97,13 +106,7 @@ impl ColorBuffer {
 
         for y in 0..self.height {
             for x in 0..self.width {
-                let (mut r, mut g, mut b, weight) = self.get_color(x, y);
-                if weight != 0.0 {
-                    let factor = 1.0 / weight;
-                    r = factor * r;
-                    g = factor * g;
-                    b = factor * b;
-                }
+                let (r, g, b) = self.get_color(x, y);
                 let (mut r, mut g, mut b) = tone_map(&tmo_type, r, g, b);
                 r = r * 256.0;
                 g = g * 256.0;
@@ -135,7 +138,7 @@ impl ColorBuffer {
         let _result = buf_writer.write_all(b"-1\n");
         for y in 0..self.height {
             for x in 0..self.width {
-                let (r, g, b, _weight) = self.get_color(x, self.height - y - 1);
+                let (r, g, b) = self.get_color(x, self.height - y - 1);
                     let _result = buf_writer.write_all(&f32::to_le_bytes(r));
                     let _result = buf_writer.write_all(&f32::to_le_bytes(g));
                     let _result = buf_writer.write_all(&f32::to_le_bytes(b));
