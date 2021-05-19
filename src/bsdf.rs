@@ -45,7 +45,7 @@ pub fn phong_pdf(wo: f32x3, normal: f32x3, wi: f32x3, shininess: f32) -> f32 {
 	coef * r_dot_wo.powf(shininess)
 }
 
-pub fn sample_phong(normal: f32x3, shininess: f32, u1: f32, u2: f32) -> f32x3 {
+pub fn sample_phong(wo: f32x3, normal: f32x3, shininess: f32, u1: f32, u2: f32) -> f32x3 {
 	let term1 = (1.0 - u1.powf(2.0 / (shininess + 1.0))).sqrt();
 	let term2 = 2.0 * f32::consts::PI * u2;
 
@@ -53,6 +53,68 @@ pub fn sample_phong(normal: f32x3, shininess: f32, u1: f32, u2: f32) -> f32x3 {
 	let y = term1 * term2.sin();
 	let z = u1.powf(1.0 / (shininess + 1.0));
 
+	let r = math::reflect(wo, normal);
+
+	let (b1, b2) = math::frisvad_revised_onb(r);
+    (x * b1 + y * b2 + z * r).normalize()
+}
+
+pub fn ward(wo: f32x3, normal: f32x3, wi: f32x3, alpha_x: f32, alpha_y: f32) -> f32 {
+
+	fn sqr(x: f32) -> f32 {x * x}
+
+	let h = (wo + wi).normalize();
+
+	if wo.dot(normal) * wi.dot(normal) <= 0.0 { return 0.0; }
+	if alpha_x * alpha_y <= 0.0 {return 0.0; }
+
+	let denom = 4.0 * f32::consts::PI * alpha_x * alpha_y * (wo.dot(normal) * wi.dot(normal)).sqrt();
+
 	let (b1, b2) = math::frisvad_revised_onb(normal);
-    (x * b1 + y * b2 + z * normal).normalize()
+
+	let exponent = -(sqr(h.dot(b1) / alpha_x) + sqr(h.dot(b2) / alpha_y)) / sqr(h.dot(normal));
+
+	exponent.exp() / denom
+}
+
+pub fn ward_pdf(wo: f32x3, normal: f32x3, wi: f32x3, alpha_x: f32, alpha_y: f32) -> f32 {
+
+	fn sqr(x: f32) -> f32 {x * x}
+
+	let h = (wo + wi).normalize();
+
+	let theta = h.dot(normal);
+	let denom = 4.0 * f32::consts::PI * alpha_x * alpha_y * h.dot(wi) * theta * theta * theta;
+
+	let (b1, b2) = math::frisvad_revised_onb(normal);
+
+	let exponent = -(sqr(h.dot(b1) / alpha_x) + sqr(h.dot(b2) / alpha_y)) / sqr(h.dot(normal));
+
+	exponent.exp() / denom
+}
+
+pub fn sample_ward(wo: f32x3, normal: f32x3, alpha_x: f32, alpha_y: f32, u1: f32, u2: f32) -> f32x3 {
+
+	fn sqr(x: f32) -> f32 {x * x}
+
+	let mut phi_h = (alpha_y / alpha_x * (2.0 * f32::consts::PI * u2).tan()).atan();
+	// phi must be in the same quadrant as angle 2*pi*u2
+	if u2 > 0.5 {phi_h += f32::consts::PI};
+
+	let cos_phi_h = phi_h.cos();
+	let sin_phi_h = (1.0 - cos_phi_h*cos_phi_h).sqrt();
+
+	let f = -(u1.log(f32::consts::E)) / (sqr(cos_phi_h)/sqr(alpha_x) + sqr(sin_phi_h)/sqr(alpha_y));
+	let theta_h = f.sqrt().atan();
+	
+	let sin_theta = theta_h.sin();
+	let cos_theta = theta_h.cos();
+
+	let wh = f32x3(sin_theta*cos_phi_h, sin_theta*sin_phi_h, cos_theta);
+
+	let (b1, b2) = math::frisvad_revised_onb(normal);
+	let wh = (wh.0 * b1 + wh.1 * b2 + wh.2 * normal).normalize();
+
+	let wi = math::reflect(wo, wh);
+	wi
 }

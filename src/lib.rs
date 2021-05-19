@@ -20,6 +20,7 @@ mod scene_data;
 mod sampling;
 mod bsdf;
 pub mod renderer;
+mod spectrum;
 
 use std::error::Error;
 use std::fs;
@@ -30,7 +31,7 @@ use std::path::{Path, PathBuf};
 
 use crate::matrix::Matrix4x4;
 use crate::sampler::SamplerType;
-use crate::materials::{Material, MatteMaterial, PhongMaterial};
+use crate::materials::{Material, MatteMaterial, PhongMaterial, WardMaterial};
 use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
 use crate::camera::{Camera, PerspectiveCamera};
 use crate::lights::{Light, PointLight, AreaLight, DistantLight};
@@ -601,6 +602,7 @@ fn process_material_types(tokens: &Vec<String>, scene: &mut Scene, state: &mut P
     match mat_type {
         "matte" => process_matte_material(tokens, scene, state, mat_name)?,
         "phong" => process_phong_material(tokens, scene, state, mat_name)?,
+        "ward" => process_ward_material(tokens, scene, state, mat_name)?,
         _=> return Err(format!("Unsupported material type {}", mat_type).to_string().into())
     }
     Ok(())
@@ -737,6 +739,18 @@ fn process_phong_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut P
     let ks = find_spectrum("Ks", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:phong:Ks - ")?;
     let shininess = find_value("float shininess", &tokens[2..], 10.0, "Material:mate:shininess - ")?;
     let mat = Material::Phong(PhongMaterial::new(kd, ks, shininess));
+    let id = scene.add_material(mat);
+    add_material_to_state(id, mat_name, state);
+    Ok(())
+}
+
+fn process_ward_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+    let kd = find_spectrum("Kd", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:ward:Kd - ")?;
+    let ks = find_spectrum("Ks", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:ward:Ks - ")?;
+    let ax = find_value("float ax", &tokens[2..], 0.15, "Material:ward:ax - ")?;
+    let ay = find_value("float ay", &tokens[2..], 0.15, "Material:ward:ay - ")?;
+    println!("Ward {} {} ", ax, ay);
+    let mat = Material::Ward(WardMaterial::new(kd, ks, ax, ay));
     let id = scene.add_material(mat);
     add_material_to_state(id, mat_name, state);
     Ok(())
