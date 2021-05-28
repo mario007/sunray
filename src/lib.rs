@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 
 use crate::matrix::Matrix4x4;
 use crate::sampler::SamplerType;
-use crate::materials::{Material, MatteMaterial, PhongMaterial, WardMaterial};
+use crate::materials::{Material, MatteMaterial, PhongMaterial, WardMaterial, MetalMaterial, ConductorParams, MicrofacetDistType};
 use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
 use crate::camera::{Camera, PerspectiveCamera};
 use crate::lights::{Light, PointLight, AreaLight, DistantLight};
@@ -216,6 +216,8 @@ fn parse_input_string(text: &String, scene: &mut Scene, state: &mut ParseState) 
                     let next_dir = all_directives.get(next_directive.as_str()).unwrap();
                     cur_directive = next_dir;
                     fetch_token = false;
+                } else {
+                    return Err(format!("Unknown directive: {}", next_directive).to_string().into())
                 }
             } else {
                 loop {
@@ -293,6 +295,8 @@ fn process_shape(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState
 fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state: &mut ParseState) -> Result<String, Box<dyn Error>> {
     let mut vertices: Vec<f32> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
+    let mut normals: Vec<f32> = Vec::new();
+    let mut uv_coords: Vec<f32> = Vec::new();
 
     let mut next_directive = String::new();
 
@@ -305,13 +309,17 @@ fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state:
             indices = process_u32_values(tokenizer, "Triangle mesh: integer indices ")?;
         } else if token == "point P" {
             vertices = process_f32_values(tokenizer, "Triangle mesh: point P ")?;
-        } else {
+        } else if token == "normal N" {
+            normals = process_f32_values(tokenizer, "Triangle mesh: normal N ")?;
+        } else if token == "float uv" {
+            uv_coords = process_f32_values(tokenizer, "Triangle mesh: float uv ")?;
+        }
+        else {
             next_directive = token.trim().to_string();
             break;
         }
     }
     // TODO raise Error if not valid data - indices divisible by 3
-    // TODO normals and uv coords
     let mut mesh = Mesh::new();
     for i in 0..indices.len() / 3 {
         mesh.add_indices(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2]);
@@ -319,6 +327,14 @@ fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state:
 
     for i in 0..vertices.len() / 3 {
         mesh.add_vertex(vertices[i * 3 + 0], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+    }
+
+    for i in 0..normals.len() / 3 {
+        mesh.add_vertex_normal(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]);
+    }
+
+    for i in 0..uv_coords.len() / 2 {
+        mesh.add_uv(uv_coords[i * 2 + 0], uv_coords[i * 2 + 1]);
     }
 
     let material_id = state.cur_material();
@@ -603,6 +619,7 @@ fn process_material_types(tokens: &Vec<String>, scene: &mut Scene, state: &mut P
         "matte" => process_matte_material(tokens, scene, state, mat_name)?,
         "phong" => process_phong_material(tokens, scene, state, mat_name)?,
         "ward" => process_ward_material(tokens, scene, state, mat_name)?,
+        "metal" => process_metal_material(tokens, scene, state, mat_name)?,
         _=> return Err(format!("Unsupported material type {}", mat_type).to_string().into())
     }
     Ok(())
@@ -749,8 +766,41 @@ fn process_ward_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut Pa
     let ks = find_spectrum("Ks", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:ward:Ks - ")?;
     let ax = find_value("float ax", &tokens[2..], 0.15, "Material:ward:ax - ")?;
     let ay = find_value("float ay", &tokens[2..], 0.15, "Material:ward:ay - ")?;
-    println!("Ward {} {} ", ax, ay);
     let mat = Material::Ward(WardMaterial::new(kd, ks, ax, ay));
+    let id = scene.add_material(mat);
+    add_material_to_state(id, mat_name, state);
+    Ok(())
+}
+
+fn process_metal_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+    let mut alpha = find_value("float roughness", &tokens[2..], 0.01, "Material:Conductor:roughness - ")?;
+    if has_parameter("bool remaproughness", tokens) {
+        let value = find_value("bool remaproughness", &tokens[2..], "".to_string(), "Material:Conductor::remaproughness - ")?;
+        if value == "true" {
+            alpha = bsdf::ggx_and_beckmann_roughness_to_alpha(alpha);
+        }
+    } else {
+        alpha = bsdf::ggx_and_beckmann_roughness_to_alpha(alpha);
+    }
+    let con_params: ConductorParams;
+    // NOTE copper is default metal material
+    if has_parameter("rgb F0", tokens) {
+        let f0 = find_spectrum("F0", &tokens[2..], f32x3(0.955, 0.638, 0.538), "Material:Metal:F0 - ")?;
+        con_params = ConductorParams::F0(f0);
+    } else {
+        let eta = find_spectrum("eta", &tokens[2..], f32x3(0.21258, 0.8231, 1.2438), "Material:Metal:eta - ")?;
+        let k = find_spectrum("k", &tokens[2..], f32x3(4.1003, 2.4763, 2.288), "Material:Metal:k - ")?;
+        con_params = ConductorParams::IOR(eta, k);
+    }
+    let mut dist = MicrofacetDistType::GGX;
+    if has_parameter("string distribution", tokens) {
+        let value = find_value("string distribution", &tokens[2..], "ggx".to_string(), "Material:Conductor::distribution - ")?;
+        if value == "beckmann" {
+            dist = MicrofacetDistType::Beckmann;
+        } 
+    }
+
+    let mat = Material::Metal(MetalMaterial::new(con_params, alpha, dist));
     let id = scene.add_material(mat);
     add_material_to_state(id, mat_name, state);
     Ok(())

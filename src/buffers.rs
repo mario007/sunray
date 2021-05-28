@@ -94,6 +94,10 @@ impl ColorBuffer {
     }
 
     pub fn add_color(&mut self, x: usize, y:usize, r: f32, g: f32, b: f32, weight: f32) {
+        // if r.is_nan() || g.is_nan() || b.is_nan() {
+        //     println!("Nan {} {} {} {} {}", x, y, r, g, b);
+        //     return;
+        // }
         let index = y * self.width * 4 + x * 4;
         self.pixels[index] += r;
         self.pixels[index + 1] += g;
@@ -107,7 +111,7 @@ impl ColorBuffer {
         for y in 0..self.height {
             for x in 0..self.width {
                 let (r, g, b) = self.get_color(x, y);
-                let (mut r, mut g, mut b) = tone_map(&tmo_type, r, g, b);
+                let (mut r, mut g, mut b) = tone_map(&tmo_type, r, g, b); 
                 r = r * 256.0;
                 g = g * 256.0;
                 b = b * 256.0;

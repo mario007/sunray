@@ -132,10 +132,87 @@ impl WardMaterial {
 }
 
 
+pub enum ConductorParams {
+    F0(f32x3),
+    IOR(f32x3, f32x3),
+}
+
+pub enum MicrofacetDistType {
+    GGX,
+    Beckmann,
+}
+
+pub struct MetalMaterial {
+    con_params: ConductorParams,
+    alpha: f32,
+    dist_type: MicrofacetDistType,
+}
+
+impl MetalMaterial {
+    pub fn new(con_params: ConductorParams, alpha: f32, dist_type: MicrofacetDistType) -> Self {
+        let alpha = alpha.max(0.001);
+        Self {con_params, alpha, dist_type}
+    }
+
+    pub fn eval(&self, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32) {
+        let h = (wo + wi).normalize();
+        let fresnel = match self.con_params {
+            ConductorParams::F0(val) => bsdf::fresnel_schlick(val, wi, h),
+            ConductorParams::IOR(eta, etak) => bsdf::fresnel_conductor(eta, etak, h.dot(wi)),
+        };
+
+        let lambda_wo: f32;
+        let lambda_wi: f32;
+        let pdfw: f32;
+        let d: f32;
+
+        match self.dist_type {
+            MicrofacetDistType::Beckmann => {
+                d = bsdf::beckmann_dist(self.alpha, wo, normal, wi);
+                lambda_wo = bsdf::beckmann_lambda(self.alpha, normal, wo);
+                lambda_wi = bsdf::beckmann_lambda(self.alpha, normal, wi);
+                pdfw = d * normal.dot(h) / (4.0 * wo.dot(h));
+            }
+            MicrofacetDistType::GGX => {
+                d = bsdf::ggx_dist(self.alpha, wo, normal, wi);
+                lambda_wo = bsdf::ggx_lambda(self.alpha, normal, wo);
+                lambda_wi = bsdf::ggx_lambda(self.alpha, normal, wi);
+                //pdfw = d * normal.dot(h) / (4.0 * wo.dot(h));
+                // D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
+                pdfw = bsdf::smith_g1(lambda_wo) * d / (4.0 * normal.dot(wo));
+            }
+        } 
+
+        let g2 = bsdf::smith_g2(lambda_wo, lambda_wi);
+        let denom = 4.0 * normal.dot(wi) * normal.dot(wo);
+        let specular = fresnel * d * g2 * denom.recip();
+
+        (specular, pdfw)
+    }
+
+    pub fn sample(&self, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample {
+        let mut valid = true;
+    
+        let wi = match self.dist_type {
+            MicrofacetDistType::Beckmann => bsdf::sample_beckmann(wo, normal, self.alpha, path_sampler.next_1d(), path_sampler.next_1d()),
+            MicrofacetDistType::GGX => bsdf::sample_ggxvndf(wo, normal, self.alpha, self.alpha, path_sampler.next_1d(), path_sampler.next_1d())
+            //bsdf::sample_ggx(wo, normal, self.alpha, path_sampler.next_1d(), path_sampler.next_1d());
+        };
+        if wi.dot(normal) < 0.001 {
+            valid = false;
+        }
+
+        let (value, pdfw) = self.eval(wo, normal, wi);
+        if pdfw < 1e-10 { valid = false; }
+        MaterialSample::new(value, wi, pdfw, valid)
+    }
+}
+
 pub enum Material {
     Matte(MatteMaterial),
     Phong(PhongMaterial),
     Ward(WardMaterial),
+    Metal(MetalMaterial),
 }
 
 impl Material {
@@ -144,6 +221,7 @@ impl Material {
             Material::Matte(matte) => matte.eval(wo, normal, wi),
             Material::Phong(phong) => phong.eval(wo, normal, wi),
             Material::Ward(ward) => ward.eval(wo, normal, wi),
+            Material::Metal(metal) => metal.eval(wo, normal, wi),
         }
     }
 
@@ -152,6 +230,7 @@ impl Material {
             Material::Matte(matte) => matte.sample(wo, normal, path_sampler),
             Material::Phong(phong) => phong.sample(wo, normal, path_sampler),
             Material::Ward(ward) => ward.sample(wo, normal, path_sampler),
+            Material::Metal(metal) => metal.sample(wo, normal, path_sampler),
         }
     }
 }

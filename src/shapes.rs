@@ -381,7 +381,10 @@ impl<T> Shapes<T> {
 
     pub fn generate_isect(&self, index: usize, ray: &Ray, min_dist: f32, shape_type: ShapeType, sub_shape: i32) -> IsectPoint where T: CalculateNormal {
         let hitpoint = ray.origin + min_dist * ray.direction;
-        let normal = self.shapes[index].shape.calculate_normal(hitpoint, sub_shape as usize);
+        let mut normal = self.shapes[index].shape.calculate_normal(hitpoint, sub_shape as usize);
+        if normal.dot(ray.direction * -1.0) < 0.0 {
+            normal = normal * -1.0;
+        }
         let material_id = *&self.shapes[index].material_id;
         let light_id = self.area_lights_mapping[index];
         let isect_point = IsectPoint::new(hitpoint, normal, min_dist, material_id, shape_type, index, sub_shape, light_id);

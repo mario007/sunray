@@ -47,10 +47,25 @@ pub fn hemi_direction(normal: f32x3, u1: f32, u2: f32) -> f32x3 {
     (x * b1 + y * b2 + z * normal).normalize()
 }
 
-pub fn uniform_sampling_triangle(u1: f32, u2: f32) -> (f32, f32, f32) {
+/*pub fn uniform_sampling_triangle(u1: f32, u2: f32) -> (f32, f32, f32) {
     let u_sqrt = u1.sqrt();
     let u = 1.0 - u_sqrt;
     let v = u2 * u_sqrt;
+    let w = 1.0 - u - v;
+    (u, v, w)
+}*/
+
+// A Low-Distortion Map Between Triangle and Square   -   Eric Heitz
+pub fn uniform_sampling_triangle(u1: f32, u2: f32) -> (f32, f32, f32) {
+    let u: f32;
+    let v: f32;
+    if u2 > u1 {
+        u = u1 * 0.5;
+        v = u2 - u;
+    } else {
+        v = u2 * 0.5;
+        u = u1 - v;
+    }
     let w = 1.0 - u - v;
     (u, v, w)
 }

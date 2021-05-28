@@ -302,7 +302,7 @@ impl Renderer {
         for pix in rx {
             self.scene.color_buffer.add_color(pix.x as usize, pix.y as usize, pix.r, pix.g, pix.b, 1.0);
             if self.rendering_pass % 2 == 0 {
-                self.adaptive_color_buffer.add_color(pix.x as usize, pix.y as usize, pix.r, pix.g, pix.b, 1.0)
+                self.adaptive_color_buffer.add_color(pix.x as usize, pix.y as usize, pix.r, pix.g, pix.b, 1.0);
             }
         }
         self.rendering_pass += 1;
