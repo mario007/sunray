@@ -15,6 +15,10 @@ pub fn distance_sqr(p1: f32x3, p2: f32x3) -> f32 {
     dx * dx + dy * dy + dz * dz
 }
 
+pub fn sqr(x: f32) -> f32 { 
+    x * x
+}
+
 pub fn frisvad_revised_onb(normal: f32x3) -> (f32x3, f32x3) {
     if normal.2 < 0. {
         let a = 1.0 / (1.0 - normal.2);

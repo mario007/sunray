@@ -67,6 +67,7 @@ pub enum PlyProperty {
 	List(PlyList),
 }
 
+#[allow(dead_code)]
 pub struct PlyElement {
 	name: String,
 	n: usize,

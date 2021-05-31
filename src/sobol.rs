@@ -16,6 +16,7 @@ impl SobolSequences {
         }
     }
     
+    #[allow(dead_code)]
     pub fn sample_f32(&self, index: u64, dimension: u32, scramble: u32) -> f32 {
 
         let result = self.sample_u32(index, dimension, scramble);

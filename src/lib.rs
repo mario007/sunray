@@ -128,10 +128,6 @@ impl ParseState {
         self.named_materials.pop();
     }
 
-    pub fn in_general_section(&self) -> bool {
-        self.general_section
-    }
-
     pub fn set_in_general_section(&mut self, value: bool) {
         self.general_section = value;
     }
@@ -319,14 +315,27 @@ fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state:
             break;
         }
     }
-    // TODO raise Error if not valid data - indices divisible by 3
+
     let mut mesh = Mesh::new();
+
+    if indices.len() % 3 != 0 {
+        return Err(format!("Number of mesh indices must be divisible by 3: {}", indices.len()).to_string().into())
+    }
+
     for i in 0..indices.len() / 3 {
         mesh.add_indices(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2]);
     }
 
+    if vertices.len() % 3 != 0 {
+        return Err(format!("Number of mesh vertices must be divisible by 3: {}", vertices.len()).to_string().into())
+    }
+
     for i in 0..vertices.len() / 3 {
         mesh.add_vertex(vertices[i * 3 + 0], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+    }
+
+    if normals.len() > 0 && normals.len() != vertices.len() {
+        return Err(format!("Mesh must have same number of vertices and normals: {} {}", vertices.len(), normals.len()).to_string().into())
     }
 
     for i in 0..normals.len() / 3 {

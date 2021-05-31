@@ -51,7 +51,7 @@ pub fn sample_phong(wo: f32x3, normal: f32x3, shininess: f32, u1: f32, u2: f32) 
 
 	let x = term1 * term2.cos();
 	let y = term1 * term2.sin();
-	let z = u1.powf(1.0 / (shininess + 1.0));
+	let z = u1.powf((shininess + 1.0).recip());
 
 	let r = math::reflect(wo, normal);
 
@@ -60,8 +60,6 @@ pub fn sample_phong(wo: f32x3, normal: f32x3, shininess: f32, u1: f32, u2: f32) 
 }
 
 pub fn ward(wo: f32x3, normal: f32x3, wi: f32x3, alpha_x: f32, alpha_y: f32) -> f32 {
-
-	fn sqr(x: f32) -> f32 {x * x}
 
 	let h = (wo + wi).normalize();
 
@@ -72,14 +70,12 @@ pub fn ward(wo: f32x3, normal: f32x3, wi: f32x3, alpha_x: f32, alpha_y: f32) -> 
 
 	let (b1, b2) = math::frisvad_revised_onb(normal);
 
-	let exponent = -(sqr(h.dot(b1) / alpha_x) + sqr(h.dot(b2) / alpha_y)) / sqr(h.dot(normal));
+	let exponent = -(math::sqr(h.dot(b1) / alpha_x) + math::sqr(h.dot(b2) / alpha_y)) / math::sqr(h.dot(normal));
 
 	exponent.exp() / denom
 }
 
 pub fn ward_pdf(wo: f32x3, normal: f32x3, wi: f32x3, alpha_x: f32, alpha_y: f32) -> f32 {
-
-	fn sqr(x: f32) -> f32 {x * x}
 
 	let h = (wo + wi).normalize();
 
@@ -88,29 +84,25 @@ pub fn ward_pdf(wo: f32x3, normal: f32x3, wi: f32x3, alpha_x: f32, alpha_y: f32)
 
 	let (b1, b2) = math::frisvad_revised_onb(normal);
 
-	let exponent = -(sqr(h.dot(b1) / alpha_x) + sqr(h.dot(b2) / alpha_y)) / sqr(h.dot(normal));
+	let exponent = -(math::sqr(h.dot(b1) / alpha_x) + math::sqr(h.dot(b2) / alpha_y)) / math::sqr(h.dot(normal));
 
 	exponent.exp() / denom
 }
 
 pub fn sample_ward(wo: f32x3, normal: f32x3, alpha_x: f32, alpha_y: f32, u1: f32, u2: f32) -> f32x3 {
+	let cos_u2 = (2.0 * f32::consts::PI * u2).cos();
+	let sin_u2 = (2.0 * f32::consts::PI * u2).sin();
+	let denom = (math::sqr(alpha_x) * math::sqr(cos_u2) + math::sqr(alpha_y) * math::sqr(sin_u2)).sqrt();
+	let cos_phi_h = alpha_x * cos_u2 / denom;
+	let sin_phi_h = alpha_y * sin_u2 / denom;
 
-	fn sqr(x: f32) -> f32 {x * x}
-
-	let mut phi_h = (alpha_y / alpha_x * (2.0 * f32::consts::PI * u2).tan()).atan();
-	// phi must be in the same quadrant as angle 2*pi*u2
-	if u2 > 0.5 {phi_h += f32::consts::PI};
-
-	let cos_phi_h = phi_h.cos();
-	let sin_phi_h = (1.0 - cos_phi_h*cos_phi_h).sqrt();
-
-	let f = -(u1.log(f32::consts::E)) / (sqr(cos_phi_h)/sqr(alpha_x) + sqr(sin_phi_h)/sqr(alpha_y));
+	let f = -(u1.ln()) / (math::sqr(cos_phi_h) / math::sqr(alpha_x) + math::sqr(sin_phi_h) / math::sqr(alpha_y));
 	let theta_h = f.sqrt().atan();
 	
 	let sin_theta = theta_h.sin();
 	let cos_theta = theta_h.cos();
 
-	let wh = f32x3(sin_theta*cos_phi_h, sin_theta*sin_phi_h, cos_theta);
+	let wh = f32x3(sin_theta * cos_phi_h, sin_theta * sin_phi_h, cos_theta);
 
 	let (b1, b2) = math::frisvad_revised_onb(normal);
 	let wh = (wh.0 * b1 + wh.1 * b2 + wh.2 * normal).normalize();
@@ -121,16 +113,14 @@ pub fn sample_ward(wo: f32x3, normal: f32x3, alpha_x: f32, alpha_y: f32, u1: f32
 
 pub fn beckmann_dist(alpha: f32, wo: f32x3, normal: f32x3, wi: f32x3) -> f32 {
 
-	fn sqr(x: f32) -> f32 { x * x}
-
 	// microsurface normal
 	let m = (wo + wi).normalize();
 
 	let ndotm = normal.dot(m);
-	let denom = f32::consts::PI * sqr(alpha) * sqr(ndotm) * sqr(ndotm);
+	let denom = f32::consts::PI * math::sqr(alpha) * math::sqr(ndotm) * math::sqr(ndotm);
 	if denom == 0.0 { return 0.0; }
 
-	let exponent = (sqr(ndotm) - 1.0) / (sqr(alpha) * sqr(ndotm));
+	let exponent = (math::sqr(ndotm) - 1.0) / (math::sqr(alpha) * math::sqr(ndotm));
 	exponent.exp() / denom
 }
 
@@ -150,16 +140,14 @@ pub fn beckmann_lambda(alpha: f32, normal: f32x3, v: f32x3) -> f32 {
 
 pub fn ggx_dist(alpha: f32, wo: f32x3, normal: f32x3, wi: f32x3) -> f32 {
 
-	fn sqr(x: f32) -> f32 { x * x}
-
 	// microsurface noraml
 	let m = (wo + wi).normalize();
 
 	let ndotm = normal.dot(m);
 
-	let f = sqr(ndotm) * (sqr(alpha) - 1.0) + 1.0;
+	let f = math::sqr(ndotm) * (math::sqr(alpha) - 1.0) + 1.0;
 
-	sqr(alpha) / (f32::consts::PI * sqr(f))
+	math::sqr(alpha) / (f32::consts::PI * math::sqr(f))
 }
 
 pub fn ggx_lambda(alpha: f32, normal: f32x3, v: f32x3) -> f32 {
@@ -173,11 +161,11 @@ pub fn ggx_lambda(alpha: f32, normal: f32x3, v: f32x3) -> f32 {
 }
 
 pub fn smith_g1(lambda: f32) -> f32 {
-	1.0 / (1.0 + lambda)
+	(1.0 + lambda).recip()
 }
 
 pub fn smith_g2(lambda_wo: f32, lambda_wi: f32) -> f32 {
-	1.0 / (1.0 + lambda_wo + lambda_wi)
+	(1.0 + lambda_wo + lambda_wi).recip()
 }
 
 #[allow(dead_code)]
@@ -305,7 +293,7 @@ pub fn sample_ggxvndf(wo: f32x3, normal: f32x3, alpha_x: f32, alpha_y: f32, u1: 
 
 // If used, roughness values are expected to be in the range [0,1]
 pub fn ggx_and_beckmann_roughness_to_alpha(roughness: f32) -> f32 {
-    let x = roughness.max(0.001).log(f32::consts::E);
+    let x = roughness.max(0.001).ln();
     1.62142 + 0.819955 * x + 0.1734 * x * x + 0.0171201 * x * x * x + 0.000640711 * x * x * x * x
 }
 
@@ -405,4 +393,5 @@ mod tests {
 		println!("{}", ggx_and_beckmann_roughness_to_alpha(1.0));
 
 	}
+
 }

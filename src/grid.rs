@@ -8,7 +8,6 @@ pub struct UniGrid {
     inv_dim: f64x3,
     pmin: f64x3,
     pmax: f64x3,
-    cell_dim: f64x3,
     inv_cell_dim: f64x3,
     primitive_map: Vec<i32>,
     pub primitives: Vec<i32>,
@@ -16,17 +15,17 @@ pub struct UniGrid {
 
 impl UniGrid {
     pub fn new(pmin: f64x3, pmax: f64x3, dim: u32x3) -> UniGrid {
-        // TODO macro f64x3!
         let inv_dim = f64x3::from(1.0).div(f64x3::from(dim));
         let cell_dim = (pmax - pmin).div(f64x3::from(dim));
         let inv_cell_dim = f64x3(1.0, 1.0, 1.0).div(cell_dim);
         UniGrid {
-            dim, inv_dim, pmin, pmax, cell_dim, inv_cell_dim,
+            dim, inv_dim, pmin, pmax, inv_cell_dim,
             primitive_map: Vec::<i32>::new(),
             primitives: Vec::<i32>::new(),
         }
     }
 
+    #[allow(dead_code)]
     pub fn memory(&self) -> usize {
         let val1 = self.primitive_map.len() * 4;
         let val2 = self.primitives.len() * 4;

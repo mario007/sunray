@@ -19,25 +19,22 @@ pub fn cosine_hemi_pdf(n_dot_wi: f32) -> f32 {
 }
 
 pub fn cosine_hemi_direction(normal: f32x3, u1: f32, u2: f32) -> f32x3 {
-    //let u1_sqrt = u1.sqrt();
-    //let x = u1_sqrt * (2.0 * f32::consts::PI * u2).cos();
-    //let y = u1_sqrt * (2.0 * f32::consts::PI * u2).sin();
-    //let z = (1.0 - u1).sqrt();
-
     let term1 = 2.0 * f32::consts::PI * u1;
     let term2 = (1.0 - u2).sqrt();
-    let x = (term1).cos() * term2;
-    let y = (term1).sin() * term2;
+    let x = term1.cos() * term2;
+    let y = term1.sin() * term2;
     let z = u2.sqrt();
 
     let (b1, b2) = frisvad_revised_onb(normal);
     (x * b1 + y * b2 + z * normal).normalize()
 }
 
+#[allow(dead_code)]
 pub fn hemi_pdf() -> f32 {
     0.5 * f32::consts::FRAC_1_PI
 }
 
+#[allow(dead_code)]
 pub fn hemi_direction(normal: f32x3, u1: f32, u2: f32) -> f32x3 {
     let x = (2.0 * f32::consts::PI * u2).cos() * (1.0 - u1 * u1).sqrt();
     let y = (2.0 * f32::consts::PI * u2).sin() * (1.0 - u1 * u1).sqrt();
