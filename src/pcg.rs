@@ -18,7 +18,7 @@ impl PCGRandom {
         self.state = old_state.wrapping_mul(6364136223846793005u64) + (self.sequence | 1);
         let xor_shifted = (((old_state >> 18) ^ old_state) >> 27) as u32;
         let rot: u32 = (old_state >> 59) as u32;
-        return (xor_shifted >> rot) | (xor_shifted << ((-(rot as i32) as u32) & 31));
+        (xor_shifted >> rot) | (xor_shifted << ((-(rot as i32) as u32) & 31))
     }
 
     pub fn random_f32(&mut self) -> f32 {

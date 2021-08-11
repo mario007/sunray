@@ -11,6 +11,6 @@ pub struct Ray {
 impl Ray {
     pub fn new(origin: f32x3, direction: f32x3) -> Ray {
         let inv_direction = f32x3(1.0, 1.0, 1.0).div(direction);
-        return Ray {origin, direction, inv_direction}
+        Ray {origin, direction, inv_direction}
     }
 }

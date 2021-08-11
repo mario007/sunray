@@ -28,7 +28,7 @@ pub fn oren_nayar(wo: f32x3, normal: f32x3, wi: f32x3, sigma: f32) -> f32 {
 	let a = 1.0 - 0.5 * (sigma2 / (sigma2 + 0.33));
 	let b = 0.45 * (sigma2 / (sigma2 + 0.09));
 
-	return (a + b * cos_phi_difference.max(0.0) * alpha.sin() * beta.tan()) * f32::consts::FRAC_1_PI;
+	(a + b * cos_phi_difference.max(0.0) * alpha.sin() * beta.tan()) * f32::consts::FRAC_1_PI
 }
 
 pub fn phong(wo: f32x3, normal: f32x3, wi: f32x3, shininess: f32) -> f32 {
@@ -107,8 +107,7 @@ pub fn sample_ward(wo: f32x3, normal: f32x3, alpha_x: f32, alpha_y: f32, u1: f32
 	let (b1, b2) = math::frisvad_revised_onb(normal);
 	let wh = (wh.0 * b1 + wh.1 * b2 + wh.2 * normal).normalize();
 
-	let wi = math::reflect(wo, wh);
-	wi
+	math::reflect(wo, wh)
 }
 
 pub fn beckmann_dist(alpha: f32, wo: f32x3, normal: f32x3, wi: f32x3) -> f32 {
@@ -132,9 +131,9 @@ pub fn beckmann_lambda(alpha: f32, normal: f32x3, v: f32x3) -> f32 {
 	let a = cos / (alpha * sin);
 
 	if a < 1.6 {
-		return (1.0 - 1.259 * a + 0.396 * a * a) / (3.535 * a + 2.181 * a * a); 
+		(1.0 - 1.259 * a + 0.396 * a * a) / (3.535 * a + 2.181 * a * a)
 	} else {
-		return 0.0;
+		0.0
 	}
 }
 
@@ -199,8 +198,7 @@ pub fn sample_beckmann(wo: f32x3, normal: f32x3, alpha: f32, u1: f32, u2: f32) -
 	let phi = 2.0 * f32::consts::PI * u2;
 
 	let wh = spherical_direction(theta, phi, normal);
-	let wi = math::reflect(wo, wh);
-	wi
+	math::reflect(wo, wh)
 }
 
 // Note: For microfacet use microfacet normal(half vector) instead of geometric normal
@@ -230,7 +228,7 @@ pub fn fresnel_conductor(eta: f32x3, etak: f32x3, cos_theta: f32) -> f32x3
    let t4 = t2 * sin_theta2;   
    let rp = rs.mul((t3 - t4).div(t3 + t4));
 
-   return 0.5 * (rp + rs);
+   0.5 * (rp + rs)
 }
 
 #[allow(dead_code)]
@@ -240,8 +238,7 @@ pub fn sample_ggx(wo: f32x3, normal: f32x3, alpha: f32, u1: f32, u2: f32) -> f32
 	let phi = 2.0 * f32::consts::PI * u2;
 
 	let wh = spherical_direction(theta, phi, normal);
-	let wi = math::reflect(wo, wh);
-	wi
+	math::reflect(wo, wh)
 }
 
 // Input Ve: view direction
@@ -287,8 +284,7 @@ pub fn sample_ggxvndf(wo: f32x3, normal: f32x3, alpha_x: f32, alpha_y: f32, u1: 
 	//let wi = (wi_local.0 * b1 + wi_local.1 * b2 + wi_local.2 * normal).normalize();
 
 	let Ne_world = (Ne.0 * b1 + Ne.1 * b2 + Ne.2 * normal).normalize();
-	let wi = math::reflect(wo, Ne_world); 
-	wi
+	math::reflect(wo, Ne_world)
 }
 
 // If used, roughness values are expected to be in the range [0,1]

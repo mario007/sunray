@@ -48,7 +48,7 @@ fn calc_grid_dim(pmin: f64x3, pmax: f64x3, n: usize) -> u32x3 {
 pub trait UniGridBuild : BBox + BBoxPrimitive + NPrimitives {}
 
 fn populate_uni_grid_cells(pmin: f64x3, pmax: f64x3, dim: u32x3,
-    primitives: &Vec<u32>, mesh: &impl UniGridBuild) -> Vec<Vec<u32>> {
+    primitives: &[u32], mesh: &impl UniGridBuild) -> Vec<Vec<u32>> {
 
     let cell_dim = (pmax - pmin).div(f64x3(dim.0 as f64, dim.1 as f64, dim.2 as f64));
     let inv_cell_dim = f64x3(1.0, 1.0, 1.0).div(cell_dim);
@@ -77,10 +77,10 @@ fn populate_uni_grid_cells(pmin: f64x3, pmax: f64x3, dim: u32x3,
             }
         }
     }
-    return prim_indices;
+    prim_indices
 }
 
-fn compress_uni_grid(grid: &mut UniGrid, cell_primitives: &Vec<Vec<u32>>){
+fn compress_uni_grid(grid: &mut UniGrid, cell_primitives: &[Vec<u32>]){
 
     let dim = grid.dim;
 
@@ -89,10 +89,10 @@ fn compress_uni_grid(grid: &mut UniGrid, cell_primitives: &Vec<Vec<u32>>){
             for x in 0..dim.0 {
                 let index = z * dim.0 * dim.1 + y * dim.0 + x;
                 let arr = &cell_primitives[index as usize]; 
-                if arr.len() > 0 {
+                if !arr.is_empty() {
                     grid.primitive_map.push(grid.primitives.len() as i32);
-                    for k in 0..arr.len() {
-                        grid.primitives.push(arr[k] as i32);
+                    for k in arr {
+                        grid.primitives.push(*k as i32);
                     }
                     grid.primitives.push(-1);
                 } else {
@@ -113,7 +113,7 @@ pub fn create_uni_grid(shapes: &impl UniGridBuild) -> UniGrid {
     let cell_primitives = populate_uni_grid_cells(pmin, pmax, dim, &primitives, shapes);
     let mut grid = UniGrid::new(pmin, pmax, dim);
     compress_uni_grid(&mut grid, &cell_primitives);
-    return grid;
+    grid
 }
 
 
@@ -221,7 +221,7 @@ pub fn intersect(grid: &impl GridIntersect, prim: &impl PrimitiveIntersect, ray:
     fn int_coord(start_p: f64, end_p: f64, inv_dim: f64, dim: u32) -> i32 {
         let mut p = ((end_p - start_p) * inv_dim) as u32;
         if p > dim { p = dim; }
-        return p as i32;
+        p as i32
     }
     let mut ix = int_coord(pmin.0, start_point.0, inv_cell_dim.0, dim.0 - 1);
     let mut iy = int_coord(pmin.1, start_point.1, inv_cell_dim.1, dim.1 - 1);
@@ -234,12 +234,12 @@ pub fn intersect(grid: &impl GridIntersect, prim: &impl PrimitiveIntersect, ray:
     fn setup_loop(t_min: f64, index: i32, delta: f64, dir: f64, n: u32) -> (f64, i32, i32) {
         if dir > 0.0 {
             let t_next = t_min + (index + 1) as f64 * delta;
-            return (t_next, 1, n as i32);
+            (t_next, 1, n as i32)
         } else if dir < 0.0 {
             let t_next = t_min + (n - index as u32) as f64 * delta;
-            return (t_next, -1, -1);
+            (t_next, -1, -1)
         } else {
-            return (1e30, -1, -1)
+            (1e30, -1, -1)
         }
     }
 

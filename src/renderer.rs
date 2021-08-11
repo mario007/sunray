@@ -103,7 +103,7 @@ impl AdaptiveTiles {
             //let xwidth = min_width;
             let t1 = Tile::new(tile.x, tile.y, xwidth, tile.height);
             let t2 = Tile::new(tile.x + xwidth, tile.y, tile.width - xwidth, tile.height);
-            return (t1, t2);
+            (t1, t2)
         } else {
             // TODO similar error for new blocks?
 
@@ -127,7 +127,7 @@ impl AdaptiveTiles {
             //let ywidth = min_height;
             let t1 = Tile::new(tile.x, tile.y, tile.width, ywidth);
             let t2 = Tile::new(tile.x, tile.y + ywidth, tile.width, tile.height - ywidth);
-            return (t1, t2);
+            (t1, t2)
         }
     }
 
@@ -146,8 +146,8 @@ impl AdaptiveTiles {
             }
         }
         let r = ((tile.width * tile.height) as f32 / (self.width * self.height) as f32).sqrt();
-        tile_error = tile_error * (r / (tile.width * tile.height) as f32);
-        return tile_error;
+        tile_error *= r / (tile.width * tile.height) as f32;
+        tile_error
     }
 
     fn split_to_small_tiles(&self, tile: &Tile) -> Vec<Tile> {
@@ -238,9 +238,9 @@ impl Renderer {
             if self.rendering_pass > 2048 {
                 return true;
             }
-            return self.render_adaptive()
+            self.render_adaptive()
         } else {
-            return self.render_regular()
+            self.render_regular()
         }
     }
 
@@ -253,7 +253,7 @@ impl Renderer {
     }
 
     fn render_adaptive(&mut self) -> bool {
-        if self.adaptive_tiles.tiles.len() == 0 {
+        if self.adaptive_tiles.tiles.is_empty() {
             return true;
         }
 
@@ -262,7 +262,7 @@ impl Renderer {
         for _i in 0..10 {
             self.render_adaptive_pass();
         }
-        self.adaptive_tiles.tiles.len() == 0
+        self.adaptive_tiles.tiles.is_empty()
     }
 
     fn render_pass(&mut self) {
@@ -354,5 +354,9 @@ impl Renderer {
 
     pub fn save_image(&self, tmo_type: TMOType) {
         self.scene.color_buffer.save(&self.scene.output_filename, tmo_type).unwrap();
+    }
+
+    pub fn to_rgb_vector(&self, tmo_type: TMOType) -> Vec<u32> {
+        self.scene.color_buffer.to_rgb_vector(tmo_type)
     }
 }

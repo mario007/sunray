@@ -18,8 +18,8 @@ pub struct BaseCamera {
 impl BaseCamera {
     pub fn new(xres: u32, yres: u32) -> BaseCamera {
         BaseCamera {
-            xres: xres,
-            yres: yres,
+            xres,
+            yres,
             camera_to_world: Matrix4x4::identity(),
 
             aspect_ratio: None,
@@ -92,7 +92,7 @@ impl PerspectiveCamera {
     pub fn new(xres: u32, yres: u32, fov: f32) -> PerspectiveCamera {
         PerspectiveCamera {
             base: BaseCamera::new(xres, yres),
-            fov: fov,
+            fov,
             raster_to_camera: Matrix4x4::identity(),
         }
     }

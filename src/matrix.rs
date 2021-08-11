@@ -23,6 +23,7 @@ impl Matrix4x4 {
         Matrix4x4::new()
     }
 
+    #[allow(clippy::float_cmp)]
     pub fn is_identity(&self) -> bool {
         self.m[0][0] == 1.0 && self.m[0][1] == 0.0 && self.m[0][2] == 0.0 && self.m[0][3] == 0.0 && 
         self.m[1][0] == 0.0 && self.m[1][1] == 1.0 && self.m[1][2] == 0.0 && self.m[1][3] == 0.0 &&
@@ -184,6 +185,7 @@ impl Matrix4x4 {
         Matrix4x4::scale(inv_tan, inv_tan, 1.0) * persp
     }
 
+    #[allow(clippy::float_cmp)]
     pub fn transform_point(self, p: f32x3) -> f32x3 {
         let x = self.m[0][0] * p.0 + self.m[0][1] * p.1 + self.m[0][2] * p.2 + self.m[0][3];
         let y = self.m[1][0] * p.0 + self.m[1][1] * p.1 + self.m[1][2] * p.2 + self.m[1][3];
@@ -191,9 +193,9 @@ impl Matrix4x4 {
         let w = self.m[3][0] * p.0 + self.m[3][1] * p.1 + self.m[3][2] * p.2 + self.m[3][3];
 
         if w == 1.0 {
-            return f32x3(x, y, z);
+            f32x3(x, y, z)
         } else {
-            return f32x3(x, y, z).div(f32x3(w, w, w));
+            f32x3(x, y, z).div(f32x3(w, w, w))
         }
     }
 

@@ -25,20 +25,19 @@ pub fn frisvad_revised_onb(normal: f32x3) -> (f32x3, f32x3) {
         let b = normal.0 * normal.1 * a;
         let b1 = f32x3(1.0 - normal.0 * normal.0 * a, -b, normal.0);
         let b2 = f32x3(b, normal.1 * normal.1 * a - 1.0, -normal.1);
-        return (b1, b2);
+        (b1, b2)
     } else {
         let a = 1.0 / (1.0 + normal.2);
         let b = -normal.0 * normal.1 * a;
         let b1 = f32x3(1.0 - normal.0 * normal.0 * a, b, -normal.0);
         let b2 = f32x3(b, 1.0 - normal.1 * normal.1 * a, -normal.1);
-        return (b1, b2);
+        (b1, b2)
     }
 }
 
 pub fn reflect(v: f32x3, normal: f32x3) -> f32x3 {
     2.0 * v.dot(normal) * normal - v
 }
-
 
 pub fn barycentric(p: f32x3, a: f32x3, b: f32x3, c: f32x3) -> (f32, f32, f32) {
     let v0 = b - a;

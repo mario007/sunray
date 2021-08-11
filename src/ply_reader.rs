@@ -21,7 +21,7 @@ pub fn read_ply_file<P: AsRef<Path>>(path: P, model: &mut impl PlyModel)  -> Res
 	let file_path = path.as_ref().to_str().unwrap();
     let header = read_header(&mut buf_reader, file_path)?;
 	if header.elements.len() < 2 {
-		return Err(format!("{} - Vertex or Indices list is missing!", file_path).to_string().into())
+		return Err(format!("{} - Vertex or Indices list is missing!", file_path).into())
 	}
 	read_vertices(&mut buf_reader, &header, model)?;
 	read_faces(&mut buf_reader, &header, model)?;
@@ -114,7 +114,7 @@ fn conv_dtype(dtype: &str, err_msg: &str) -> Result<DataType, Box<dyn Error>>{
 		"float32" => Ok(DataType::FLOAT),
 		"double" => Ok(DataType::DOUBLE),
 		"double64" => Ok(DataType::DOUBLE),
-		_ => return Err(format!("{} - Unexpected data type {}", err_msg, dtype).to_string().into()),
+		_ => return Err(format!("{} - Unexpected data type {}", err_msg, dtype).into()),
 	}
 }
 
@@ -123,7 +123,7 @@ fn read_header(buf_reader: &mut BufReader<File>, path: &str) -> Result<PlyHeader
 	let _len = buf_reader.read_line(&mut line);
 	if line.trim() != "ply" {
         let err_msg = format!("{} not valid, got magic number {} instead of 'ply'", path, line.trim());
-        return Err(err_msg.to_string().into());
+        return Err(err_msg.into());
 	}
 	line.clear();
 
@@ -133,8 +133,7 @@ fn read_header(buf_reader: &mut BufReader<File>, path: &str) -> Result<PlyHeader
     loop {
 		let len = buf_reader.read_line(&mut line);
         if let Ok(0) = len {
-            let err_msg = format!("{} - Unexpected end of header!", path);
-            return Err(err_msg.to_string().into());
+            return Err(format!("{} - Unexpected end of header!", path).into());
         } 
 		if line.trim() == "" || line.trim_start().starts_with("comment") {
 			line.clear();
@@ -145,13 +144,13 @@ fn read_header(buf_reader: &mut BufReader<File>, path: &str) -> Result<PlyHeader
 			let format = line.split_whitespace().nth(1);
             let format = match format {
                 Some(format) => format.trim(),
-                None => return Err(format!("{} - Ply format not specified", path).to_string().into())
+                None => return Err(format!("{} - Ply format not specified", path).into())
             };
 			match format {
 				"ascii" => ply_format = PlyFormat::ascii,
 				"binary_little_endian" => ply_format = PlyFormat::binary_little_endian,
 				"binary_big_endian" => ply_format = PlyFormat::binary_big_endian,
-				_=> return Err(format!("{} - Unexpected ply format!", path).to_string().into())
+				_=> return Err(format!("{} - Unexpected ply format!", path).into())
 			}
 			line.clear();
 			continue;
@@ -161,15 +160,15 @@ fn read_header(buf_reader: &mut BufReader<File>, path: &str) -> Result<PlyHeader
 			let mut iter = line.split_whitespace();
             let name = match iter.nth(1) {
                 Some(name) => name,
-                None => return Err(format!("{} - Name of element missing", path).to_string().into())
+                None => return Err(format!("{} - Name of element missing", path).into())
             };
 
             let n = match iter.next() {
                 Some(n) => match n.parse() {
                     Ok(value) => value,
-                    Err(e) => return Err(format!("{} - Element {} Parsing: {}", path, name, e).to_string().into()),
+                    Err(e) => return Err(format!("{} - Element {} Parsing: {}", path, name, e).into()),
                 },
-                None => return Err(format!("{} - Number of elements {} expected!", path, name).to_string().into())
+                None => return Err(format!("{} - Number of elements {} expected!", path, name).into())
             };
 
 			ply_elements.push(PlyElement::new(name.to_string(), n));
@@ -181,44 +180,44 @@ fn read_header(buf_reader: &mut BufReader<File>, path: &str) -> Result<PlyHeader
 			let mut iter = line.split_whitespace();
 			let dtype = match iter.nth(1) {
                 Some(dtype) => dtype,
-                None => return Err(format!("{} - Data type of element is missing", path).to_string().into())
+                None => return Err(format!("{} - Data type of element is missing", path).into())
             };
 
 			if dtype == "list" {
 				let n_indices_dtype = match iter.next() {
 					Some(n_indices_dtype) => n_indices_dtype,
-					None => return Err(format!("{} - Missing data type for number of indices in 'list'", path).to_string().into())
+					None => return Err(format!("{} - Missing data type for number of indices in 'list'", path).into())
 				};
 				let indices_dtype = match iter.next() {
 					Some(indices_dtype) => indices_dtype,
-					None => return Err(format!("{} - Missing data type for indices element in 'list'", path).to_string().into())
+					None => return Err(format!("{} - Missing data type for indices element in 'list'", path).into())
 				};
 				let name = match iter.next() {
 					Some(name) => name,
-					None => return Err(format!("{} - Missing property list name", path).to_string().into())
+					None => return Err(format!("{} - Missing property list name", path).into())
 				};
 				
 				let n_indices_dtype = conv_dtype(n_indices_dtype, path)?;
 				let indices_dtype = conv_dtype(indices_dtype, path)?;
-				let property = PlyProperty::List(PlyList{n_indices_dtype, indices_dtype: indices_dtype, name: name.to_string()});
+				let property = PlyProperty::List(PlyList{n_indices_dtype, indices_dtype, name: name.to_string()});
 				let n = ply_elements.len();
 				if n == 0 {
-					return Err(format!("{} - Element list is empty", path).to_string().into())
+					return Err(format!("{} - Element list is empty", path).into())
 				}
-				&mut ply_elements[n-1].add_property(property);
+				ply_elements[n-1].add_property(property);
 			} else {
 				let name = match iter.next() {
 					Some(name) => name,
-					None => return Err(format!("{} - Missing property name", path).to_string().into())
+					None => return Err(format!("{} - Missing property name", path).into())
 				};
 
 				let dtype = conv_dtype(dtype, path)?;
 				let property = PlyProperty::Item(PlyItem{dtype, name: name.to_string()});
 				let n = ply_elements.len();
 				if n == 0 {
-					return Err(format!("{} - Element list is empty", path).to_string().into())
+					return Err(format!("{} - Element list is empty", path).into())
 				}
-				&mut ply_elements[n-1].add_property(property);
+				ply_elements[n-1].add_property(property);
 			}
 
 			line.clear();
@@ -248,7 +247,7 @@ fn read_vertices(buf_reader: &mut BufReader<File>, header: &PlyHeader, model: &m
 
 fn vertex_element_has_name(header: &PlyHeader, name: &str) -> bool {
 	let element = &header.elements[0];
-	if element.properties.len() < 1 {
+	if element.properties.is_empty() {
 		return false;
 	}
 	let mut has_name = false; 
@@ -277,8 +276,7 @@ fn read_ascii_vertices(buf_reader: &mut BufReader<File>, header: &PlyHeader, mod
 	while i < n_vertices {
 		let len = buf_reader.read_line(&mut line);
 		if let Ok(0) = len {
-            let err_msg = format!("Unexpected end of file!");
-            return Err(err_msg.to_string().into());
+            return Err("Unexpected end of file!".into());
         }
 		if line.trim() == "" || line.trim_start().starts_with("comment") {
 			line.clear();
@@ -317,9 +315,9 @@ fn parse_f32(token: Option<&str>) -> Result<f32, Box<dyn Error>>  {
 	match token {
 		Some(v0) => match v0.parse() {
 			Ok(value) => Ok(value),
-			Err(e) => return Err(format!("Parsing vertex: {}", e).to_string().into()),
+			Err(e) => return Err(format!("Parsing vertex: {}", e).into()),
 		},
-		None => return Err(format!("Vertex missing!").to_string().into())
+		None => Err("Vertex missing!".into())
 	}
 }
 
@@ -327,9 +325,9 @@ fn parse_u8(token: Option<&str>) -> Result<u8, Box<dyn Error>>  {
 	match token {
 		Some(v0) => match v0.parse() {
 			Ok(value) => Ok(value),
-			Err(e) => return Err(format!("Parsing vertex color: {}", e).to_string().into()),
+			Err(e) => return Err(format!("Parsing vertex color: {}", e).into()),
 		},
-		None => return Err(format!("Vertex color missing!").to_string().into())
+		None => Err("Vertex color missing!".into())
 	}
 }
 
@@ -348,7 +346,7 @@ fn byte_size(dtype: &DataType) -> usize {
 
 fn vertex_component_size(header: &PlyHeader) -> usize {
 	let element = &header.elements[0];
-	if element.properties.len() < 1 {
+	if element.properties.is_empty() {
 		return 0;
 	}
 	match &element.properties[0] {
@@ -359,7 +357,7 @@ fn vertex_component_size(header: &PlyHeader) -> usize {
 
 fn face_list_n_type_size(header: &PlyHeader) -> usize {
 	let element = &header.elements[1];
-	if element.properties.len() < 1 {
+	if element.properties.is_empty() {
 		return 0;
 	}
 	match &element.properties[0] {
@@ -370,7 +368,7 @@ fn face_list_n_type_size(header: &PlyHeader) -> usize {
 
 fn face_list_item_type_size(header: &PlyHeader) -> usize {
 	let element = &header.elements[1];
-	if element.properties.len() < 1 {
+	if element.properties.is_empty() {
 		return 0;
 	}
 	match &element.properties[0] {
@@ -388,7 +386,7 @@ fn read_binary_vertices(buf_reader: &mut BufReader<File>, header: &PlyHeader,
 
 	let v_size = vertex_component_size(header);
 	if v_size != 4 && v_size != 8 {
-		return Err("Vertex component(x, y, z) data type must be float or double".to_string().into());
+		return Err("Vertex component(x, y, z) data type must be float or double".into());
 	}
 	let has_normals = vertex_element_has_name(header, "nx");
 	let has_uv = vertex_element_has_name(header, "u");
@@ -419,7 +417,7 @@ fn read_binary_vertices(buf_reader: &mut BufReader<File>, header: &PlyHeader,
 			model.add_vertex(v0, v1, v2);
 		}
 		if let Err(e) = len {
-            return Err(format!("Error: {}", e).to_string().into());
+            return Err(format!("Error: {}", e).into());
         }
 
 		if has_normals {
@@ -487,8 +485,7 @@ fn read_ascii_faces(buf_reader: &mut BufReader<File>, header: &PlyHeader, model:
 	while i < n_faces {
 		let len = buf_reader.read_line(&mut line);
 		if let Ok(0) = len {
-            let err_msg = format!("Unexpected end of file!");
-            return Err(err_msg.to_string().into());
+            return Err("Unexpected end of file!".into());
         }
 		if line.trim() == "" || line.trim_start().starts_with("comment") {
 			line.clear();
@@ -517,9 +514,9 @@ fn parse_u32(token: Option<&str>) -> Result<u32, Box<dyn Error>>  {
 	match token {
 		Some(v0) => match v0.parse() {
 			Ok(value) => Ok(value),
-			Err(e) => return Err(format!("Parsing vertex: {}", e).to_string().into()),
+			Err(e) => return Err(format!("Parsing vertex: {}", e).into()),
 		},
-		None => return Err(format!("Vertex missing!").to_string().into())
+		None => Err("Vertex missing!".into())
 	}
 }
 
@@ -558,14 +555,14 @@ fn read_binary_value(buf_reader: &mut BufReader<File>, size: usize, little_endia
 	if size == 1 {
 		let mut buffer1: [u8; 1] = [0; 1];
 		let len = buf_reader.read_exact(&mut buffer1);
-		if let Err(_) = len {
+		if len.is_err() {
             return (true, 0);
         }
 		value = buffer1[0] as u32;
 	} else if size == 2 {
 		let mut buffer2: [u8; 2] = [0; 2];
 		let len = buf_reader.read_exact(&mut buffer2);
-		if let Err(_) = len {
+		if len.is_err() {
             return (true, 0);
         }
 		if little_endian {
@@ -576,7 +573,7 @@ fn read_binary_value(buf_reader: &mut BufReader<File>, size: usize, little_endia
 	} else if size == 4 {
 		let mut buffer4: [u8; 4] = [0; 4];
 		let len = buf_reader.read_exact(&mut buffer4);
-		if let Err(_) = len {
+		if len.is_err() {
             return (true, 0);
         }
 		if little_endian {
@@ -585,5 +582,5 @@ fn read_binary_value(buf_reader: &mut BufReader<File>, size: usize, little_endia
 			value = u32::from_be_bytes(buffer4);
 		}
 	}
-	return (false, value);
+	(false, value)
 }

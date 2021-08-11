@@ -107,7 +107,7 @@ pub fn intersection_aabb(min_p: f32x3, max_p: f32x3, origin: f32x3, inv_dir: f32
             return tmin;
         }
     }
-    return 0.0;
+    0.0
 
     //return tmax > tmin.max(0.0);
     // if tmax <= tmin.max(0.0) { return 0.0; } // no intersection
@@ -144,7 +144,7 @@ pub fn isect_sphere(r_origin: f64x3, r_dir: f64x3, position: f64x3, radius: f64,
             return t;
         }
     }
-    return 0.0;
+    0.0
 }
     
 pub fn ray_triangle_isect(v0: f64x3, v1: f64x3, v2: f64x3, origin: f64x3, dir: f64x3) -> f64 {
@@ -192,5 +192,5 @@ pub fn ray_triangle_isect(v0: f64x3, v1: f64x3, v2: f64x3, origin: f64x3, dir: f
     if t < 0.00001 { // self-intersection
         return 0.0;
     }
-    return t;
+    t
 }

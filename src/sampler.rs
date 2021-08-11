@@ -32,20 +32,18 @@ fn laine_karras_permutation(x: u32, seed: u32) -> u32
     let x = x ^ (x.wrapping_mul(0x6c50b47cu32));
     let x = x ^ (x.wrapping_mul(0xb82f1e52u32));
     let x = x ^ (x.wrapping_mul(0xc7afe638u32));
-    let x = x ^ (x.wrapping_mul(0x8d22f6e6u32));
-    return x;
+    x ^ (x.wrapping_mul(0x8d22f6e6u32))
 }
 
 fn nested_uniform_scramble(x: u32, seed: u32) -> u32
 {
     let x = x.reverse_bits();
     let x = laine_karras_permutation(x, seed);
-    let x = x.reverse_bits();
-    return x;
+    x.reverse_bits()
 }
 
 fn hash_combine(seed: u32, v: u32) -> u32 {
-    return seed ^ (v.wrapping_add(seed << 6).wrapping_add(seed >> 2));
+    seed ^ (v.wrapping_add(seed << 6).wrapping_add(seed >> 2))
 }
 
 pub struct SobolSampler {

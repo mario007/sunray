@@ -37,7 +37,7 @@ pub struct SceneData {
 
 impl SceneData {
     pub fn new() -> Self {
-        SceneData {
+        Self {
             materials: Vec::new(),
             lights: Vec::new(),
 
@@ -66,19 +66,19 @@ impl SceneData {
     }
 
     pub fn add_sphere(&mut self, sphere: ShapeInstance<Sphere>) -> u32 {
-        return self.spheres.add_shape(sphere);
+        self.spheres.add_shape(sphere)
     }
 
     pub fn add_transformed_sphere(&mut self, sphere: ShapeInstance<TransformShape<Sphere>>) -> u32 {
-        return self.tran_spheres.add_shape(sphere);
+        self.tran_spheres.add_shape(sphere)
     }
 
     pub fn add_mesh(&mut self, mesh: ShapeInstance<Mesh>)-> u32 {
-        return self.meshes.add_shape(mesh);
+        self.meshes.add_shape(mesh)
     }
 
     pub fn add_transformed_mesh(&mut self, mesh: ShapeInstance<TransformShape<Mesh>>) -> u32 {
-        return self.tran_meshes.add_shape(mesh);
+        self.tran_meshes.add_shape(mesh)
     }
 
     pub fn prepare(&mut self) {
@@ -156,18 +156,18 @@ impl SceneData {
 
         match shape_type {
             ShapeType::Sphere => {
-                return Some(self.spheres.generate_isect(shape_idx as usize, ray, min_dist, shape_type, -1))
+                Some(self.spheres.generate_isect(shape_idx as usize, ray, min_dist, shape_type, -1))
             }
             ShapeType::TransformSphere => {
-                return Some(self.tran_spheres.generate_isect(shape_idx as usize, ray, min_dist, shape_type, -1))
+                Some(self.tran_spheres.generate_isect(shape_idx as usize, ray, min_dist, shape_type, -1))
             }
             ShapeType::Mesh => {
-                return Some(self.meshes.generate_isect(shape_idx as usize, ray, min_dist, shape_type, triangle_idx))
+                Some(self.meshes.generate_isect(shape_idx as usize, ray, min_dist, shape_type, triangle_idx))
             }
             ShapeType::TransformMesh => {
-                return Some(self.tran_meshes.generate_isect(shape_idx as usize, ray, min_dist, shape_type, triangle_idx))
+                Some(self.tran_meshes.generate_isect(shape_idx as usize, ray, min_dist, shape_type, triangle_idx))
             }
-            ShapeType::None => return None
+            ShapeType::None => None
         }
     }
 
@@ -245,7 +245,7 @@ impl SceneData {
                 let triangle_picking_pdf = 1.0 / tran_mesh.shape.nprimitives() as f32;
                 ShapeSample::new(position, wi, pdf * triangle_picking_pdf, cos_theta, valid)
             }
-            ShapeType::None => return ShapeSample::new(f32x3(0.0, 0.0, 0.0), f32x3(0.0, 0.0, 0.0), 0.0, 0.0, false)
+            ShapeType::None => ShapeSample::new(f32x3(0.0, 0.0, 0.0), f32x3(0.0, 0.0, 0.0), 0.0, 0.0, false)
         }
     }
 
@@ -272,14 +272,13 @@ impl SceneData {
                 let triangle_picking_pdf = 1.0 / tran_mesh.shape.nprimitives() as f32;
                 triangle_pdf(v1, v2, v3) * triangle_picking_pdf
             }
-            ShapeType::None => return 0.0
+            ShapeType::None => 0.0
         }
     }
 
     fn calc_index(&self, n: usize, path_sampler: &mut PathSampler) -> usize {
         let index = path_sampler.next_1d() * n as f32;
-        let index = (index as usize).min(n - 1);
-        index
+        (index as usize).min(n - 1)
     }
 
     pub fn lights_sample_li(&self, isect: &IsectPoint, path_sampler: &mut PathSampler) -> LightSample {
@@ -287,7 +286,7 @@ impl SceneData {
         let light_picking_pdf = 1.0 / nlights as f32;
         let light_id = self.calc_index(nlights, path_sampler);
         let mut ls = self.light_sample_li(light_id, isect, path_sampler);
-        ls.pdfa = ls.pdfa * light_picking_pdf;
+        ls.pdfa *= light_picking_pdf;
         ls
     }
 
@@ -315,7 +314,13 @@ impl SceneData {
             ShapeType::TransformMesh => {
                 self.tran_meshes.set_area_light(shape_id, light_id)
             }
-            ShapeType::None => return
+            ShapeType::None => {}
         }
+    }
+}
+
+impl Default for SceneData {
+    fn default() -> Self {
+        SceneData::new()
     }
 }

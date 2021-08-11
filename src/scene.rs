@@ -46,7 +46,7 @@ impl Scene {
             color_buffer: ColorBuffer::new(200, 200),
             options: Arc::new(SceneOptions::new(200, 200, SamplerType::Sobol, 16, IntegratorType::DirectLighting)),
             camera: Arc::new(Camera::Perspective(PerspectiveCamera::new(200, 200, 90.0))),
-            scene_data: Arc::new(SceneData::new()),
+            scene_data: Arc::new(SceneData::default()),
         }        
     }
 
@@ -95,22 +95,22 @@ impl Scene {
 
     pub fn add_sphere(&mut self, sphere: ShapeInstance<Sphere>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        return data.add_sphere(sphere);
+        data.add_sphere(sphere)
     }
 
     pub fn add_transformd_sphere(&mut self, sphere: ShapeInstance<TransformShape<Sphere>>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        return data.add_transformed_sphere(sphere);
+        data.add_transformed_sphere(sphere)
     }
 
     pub fn add_mesh(&mut self, mesh: ShapeInstance<Mesh>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        return data.add_mesh(mesh);
+        data.add_mesh(mesh)
     }
 
     pub fn add_transformed_mesh(&mut self, mesh: ShapeInstance<TransformShape<Mesh>>) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
-        return data.add_transformed_mesh(mesh);
+        data.add_transformed_mesh(mesh)
     }
 
     pub fn add_material(&mut self, mat: Material) -> u32 {

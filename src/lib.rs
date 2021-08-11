@@ -21,6 +21,8 @@ mod sampling;
 mod bsdf;
 pub mod renderer;
 mod spectrum;
+mod texture;
+mod image_io;
 
 use std::error::Error;
 use std::fs;
@@ -56,16 +58,11 @@ struct ParseState {
 
 impl ParseState {
     pub fn new() -> Self {
-
-        let mut matrices = Vec::new();
-        matrices.push(Matrix4x4::identity());
-        let mut materials_ids = Vec::new();
-        materials_ids.push(0);
-        let mut area_lights_infos = Vec::new();
+        let matrices = vec![Matrix4x4::identity()];
+        let materials_ids = vec![0];
         let info = AreaLightInfo{type_name: "".to_string(), radiance: f32x3(0.0, 0.0, 0.0)};
-        area_lights_infos.push(info);
-        let mut named_materials = Vec::new();
-        named_materials.push(HashMap::new());
+        let area_lights_infos = vec![info];
+        let named_materials = vec![HashMap::new()];
 
         Self {
             matrices,
@@ -94,7 +91,8 @@ impl ParseState {
     }
 
     pub fn cur_material(&self) -> u32 {
-        self.materials_ids[self.materials_ids.len() - 1]
+        //self.materials_ids[self.materials_ids.len() - 1]
+        *self.materials_ids.last().expect("No material exist!")
     }
 
     pub fn cur_area_light_type(&self) -> &str {
@@ -139,18 +137,18 @@ impl ParseState {
     pub fn add_named_material(&mut self, name: String, material_id: u32) {
         let index = self.named_materials.len() - 1;
         let map = &mut self.named_materials[index];
-        // Todo - logger - is material allready exist it will be redefined
+        // Todo - logger - if material allready exist it will be redefined
         map.insert(name, material_id);
     }
 
     pub fn get_named_material(&self, name: &str) -> u32 {
         let index = self.named_materials.len() - 1;
         let map = &self.named_materials[index];
-        *map.get(name).expect(format!("Material {} doesn't exist!", name).as_str())
+        *map.get(name).unwrap_or_else(|| panic!("Material {} doesn't exist!", name))
     }
 }
 
-pub fn parse_input_file(filename: &String) -> Result<Scene, Box<dyn Error>> {
+pub fn parse_input_file(filename: &str) -> Result<Scene, Box<dyn Error>> {
     let contents = fs::read_to_string(filename)?;
     let mut scene = Scene::new();
     let mut state = ParseState::new();
@@ -161,7 +159,7 @@ pub fn parse_input_file(filename: &String) -> Result<Scene, Box<dyn Error>> {
     Ok(scene)
 }
 
-fn parse_input_string(text: &String, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn parse_input_string(text: &str, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
 
     let mut ct = PBRTTokenizer::new(text);
     let mut cur_directive = "";
@@ -213,7 +211,7 @@ fn parse_input_string(text: &String, scene: &mut Scene, state: &mut ParseState) 
                     cur_directive = next_dir;
                     fetch_token = false;
                 } else {
-                    return Err(format!("Unknown directive: {}", next_directive).to_string().into())
+                    return Err(format!("Unknown directive: {}", next_directive).into())
                 }
             } else {
                 loop {
@@ -242,13 +240,13 @@ fn parse_input_string(text: &String, scene: &mut Scene, state: &mut ParseState) 
             let contents = fs::read_to_string(full_path)?; 
             parse_input_string(&contents, scene, state)?;
         } else {
-            return Err(format!("Unknown directive: {}", cur_directive).to_string().into())
+            return Err(format!("Unknown directive: {}", cur_directive).into())
         }
     }
     Ok(())
 }
 
-fn process_directive(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_directive(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     match &tokens[0].trim() as &str {
         "LookAt" => process_look_at(tokens, scene, state)?,
         "Camera" => process_camera(tokens, scene, state)?,
@@ -273,17 +271,17 @@ fn process_directive(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseS
         "Identity" => process_identity_transform(tokens, scene, state)?,
         "Transform" => process_transform(tokens, scene, state)?,
         "ConcatTransform" => process_concat_transform(tokens, scene, state)?,
-        _=> return Err(format!("Unsupported directive to process: {}", tokens[0]).to_string().into())
+        _=> return Err(format!("Unsupported directive to process: {}", tokens[0]).into())
     }
     Ok(())
 }
 
-fn process_shape(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_shape(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
 
     match &tokens[0] as &str {
         "sphere" => process_shape_sphere(tokens, scene, state)?,
         "plymesh" => process_shape_plymesh(tokens, scene, state)?,
-        _=> return Err(format!("Unsupported shape to process: {}", tokens[0]).to_string().into())
+        _=> return Err(format!("Unsupported shape to process: {}", tokens[0]).into())
     }
     Ok(())
 }
@@ -319,31 +317,31 @@ fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state:
     let mut mesh = Mesh::new();
 
     if indices.len() % 3 != 0 {
-        return Err(format!("Number of mesh indices must be divisible by 3: {}", indices.len()).to_string().into())
+        return Err(format!("Number of mesh indices must be divisible by 3: {}", indices.len()).into())
     }
 
     for i in 0..indices.len() / 3 {
-        mesh.add_indices(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2]);
+        mesh.add_indices(indices[i * 3], indices[i * 3 + 1], indices[i * 3 + 2]);
     }
 
     if vertices.len() % 3 != 0 {
-        return Err(format!("Number of mesh vertices must be divisible by 3: {}", vertices.len()).to_string().into())
+        return Err(format!("Number of mesh vertices must be divisible by 3: {}", vertices.len()).into())
     }
 
     for i in 0..vertices.len() / 3 {
-        mesh.add_vertex(vertices[i * 3 + 0], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+        mesh.add_vertex(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
     }
 
-    if normals.len() > 0 && normals.len() != vertices.len() {
-        return Err(format!("Mesh must have same number of vertices and normals: {} {}", vertices.len(), normals.len()).to_string().into())
+    if !normals.is_empty() && normals.len() != vertices.len() {
+        return Err(format!("Mesh must have same number of vertices and normals: {} {}", vertices.len(), normals.len()).into())
     }
 
     for i in 0..normals.len() / 3 {
-        mesh.add_vertex_normal(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]);
+        mesh.add_vertex_normal(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
     }
 
     for i in 0..uv_coords.len() / 2 {
-        mesh.add_uv(uv_coords[i * 2 + 0], uv_coords[i * 2 + 1]);
+        mesh.add_uv(uv_coords[i * 2], uv_coords[i * 2 + 1]);
     }
 
     let material_id = state.cur_material();
@@ -364,15 +362,15 @@ fn process_trianglemesh(tokenizer: &mut PBRTTokenizer, scene: &mut Scene, state:
 fn process_u32_values(tokenizer: &mut PBRTTokenizer, err_msg: &str) -> Result<Vec<u32>, Box<dyn Error>> {
     let token = match tokenizer.next() {
         Some(token) => token,
-        None => return Err(format!("{} '[' is expected", err_msg).to_string().into())
+        None => return Err(format!("{} '[' is expected", err_msg).into())
     };
-    if token != "[" { return Err(format!("{} '[' is expected, got '{}'", err_msg, token).to_string().into()); }
+    if token != "[" { return Err(format!("{} '[' is expected, got '{}'", err_msg, token).into()); }
 
     let mut values: Vec<u32> = Vec::new();
     loop {
         let token = match tokenizer.next() {
             Some(token) => token,
-            None => return Err(format!("{} ']' is expected", err_msg).to_string().into())
+            None => return Err(format!("{} ']' is expected", err_msg).into())
         };
         if token == "]" { break; }
         values.push(parse_u32(token, err_msg)?)
@@ -383,15 +381,15 @@ fn process_u32_values(tokenizer: &mut PBRTTokenizer, err_msg: &str) -> Result<Ve
 fn process_f32_values(tokenizer: &mut PBRTTokenizer, err_msg: &str) -> Result<Vec<f32>, Box<dyn Error>> {
     let token = match tokenizer.next() {
         Some(token) => token,
-        None => return Err(format!("{} '[' is expected", err_msg).to_string().into())
+        None => return Err(format!("{} '[' is expected", err_msg).into())
     };
-    if token != "[" { return Err(format!("{} '[' is expected, got '{}'", err_msg, token).to_string().into()); }
+    if token != "[" { return Err(format!("{} '[' is expected, got '{}'", err_msg, token).into()); }
 
     let mut values: Vec<f32> = Vec::new();
     loop {
         let token = match tokenizer.next() {
             Some(token) => token,
-            None => return Err(format!("{} ']' is expected", err_msg).to_string().into())
+            None => return Err(format!("{} ']' is expected", err_msg).into())
         };
         if token == "]" { break; }
         values.push(parse_f32(token, err_msg)?)
@@ -399,7 +397,7 @@ fn process_f32_values(tokenizer: &mut PBRTTokenizer, err_msg: &str) -> Result<Ve
     Ok(values)
 }
 
-fn process_shape_sphere(tokens: &Vec<String>, scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_shape_sphere(tokens: &[String], scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
     let radius = find_value("float radius", &tokens[1..], 1.0, "Sphere::radius - ")?;
     let position = find_f32x3("point position", &tokens[1..], f32x3(0.0, 0.0, 0.0), "Sphere:point:position - ")?;
     let sphere = Sphere::new(position, radius);
@@ -417,16 +415,16 @@ fn process_shape_sphere(tokens: &Vec<String>, scene: &mut Scene, state: &ParseSt
     Ok(())
 }
 
-fn process_shape_plymesh(tokens: &Vec<String>, scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_shape_plymesh(tokens: &[String], scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
     let filename = find_value("string filename", &tokens[1..], "".to_string(), "Plymesh::filename - ")?;
-    if filename == "" {
-        return Err(format!("Plymesh: filename expected!").to_string().into())
+    if filename.is_empty() {
+        return Err("Plymesh: filename expected!".into())
     }
     let mut mesh = Mesh::new();
     let full_path = create_path(state, &filename);
     let result = ply_reader::read_ply_file(&full_path, &mut mesh);
     if let Err(e) = result {
-        return Err(format!("Loading of {} failed! {}", &full_path, e).to_string().into());
+        return Err(format!("Loading of {} failed! {}", &full_path, e).into());
     }
     let material_id = state.cur_material();
 
@@ -440,12 +438,12 @@ fn process_shape_plymesh(tokens: &Vec<String>, scene: &mut Scene, state: &ParseS
         let id = scene.add_transformed_mesh(ShapeInstance::new(tran_mesh, material_id));
         add_diffuse_area_light(ShapeType::TransformMesh, id, scene, state)?;
     }
-    return result;
+    result
 }
 
-fn create_path(state: &ParseState, filename: &String) -> String {
+fn create_path(state: &ParseState, filename: &str) -> String {
     if Path::new(filename).is_absolute() {
-        return filename.clone();
+        return filename.to_string();
     }
     let full_path = match state.path.parent() {
         Some(dir) => dir.join(filename),
@@ -454,9 +452,9 @@ fn create_path(state: &ParseState, filename: &String) -> String {
     return full_path.to_str().expect("Path conversion faild!").to_string();
 }
 
-fn process_look_at(tokens: &Vec<String>, _scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_look_at(tokens: &[String], _scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() != 10 {
-        return Err(format!("LookAt: Exactly 9 values expected!").to_string().into())
+        return Err("LookAt: Exactly 9 values expected!".into())
     }
     let eye = parse_f32x3(&tokens[1], &tokens[2], &tokens[3], "LookAt:eye ")?;
     let look_at = parse_f32x3(&tokens[4], &tokens[5], &tokens[6], "LookAt:look_at ")?;
@@ -466,9 +464,9 @@ fn process_look_at(tokens: &Vec<String>, _scene: &mut Scene, state: &mut ParseSt
     Ok(())
 }
 
-fn process_camera(tokens: &Vec<String>, scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_camera(tokens: &[String], scene: &mut Scene, state: &ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("Camera: Type of camera not specified!").to_string().into())
+        return Err("Camera: Type of camera not specified!".into())
     }
     // TODO refactor to be like material and lights - each type of camera separate function
     if tokens[1] == "perspective" {
@@ -482,45 +480,45 @@ fn process_camera(tokens: &Vec<String>, scene: &mut Scene, state: &ParseState) -
             scene.set_camera_aspect_ratio(Some(aspect_ratio));
         }
     } else {
-        return Err(format!("Camera: Unsupported camera type - {}", tokens[1]).to_string().into())
+        return Err(format!("Camera: Unsupported camera type - {}", tokens[1]).into())
     }
     Ok(())
 }
 
-fn process_integrator(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_integrator(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("Integrator: Type of integrator not specified!").to_string().into())
+        return Err("Integrator: Type of integrator not specified!".into())
     }
     match &tokens[1] as &str {
         "directlighting" => process_integrator_direct_lgt(tokens, scene, state)?,
         "intersector" => process_integrator_isect(tokens, scene, state)?,
         "path" => process_integrator_path(tokens, scene, state)?,
-        _=> return Err(format!("Unsupported integrator type {}", tokens[1]).to_string().into())
+        _=> return Err(format!("Unsupported integrator type {}", tokens[1]).into())
     }
     Ok(())
 }
 
-fn process_integrator_path(_tokens: &Vec<String>, scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_integrator_path(_tokens: &[String], scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     scene.set_integrator_type(IntegratorType::PathTracer);
     Ok(())
 }
 
-fn process_integrator_direct_lgt(_tokens: &Vec<String>, scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_integrator_direct_lgt(_tokens: &[String], scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     scene.set_integrator_type(IntegratorType::DirectLighting);
     Ok(())
 }
 
-fn process_integrator_isect(_tokens: &Vec<String>, scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_integrator_isect(_tokens: &[String], scene: &mut Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     scene.set_integrator_type(IntegratorType::Isect);
     Ok(())
 }
 
-fn process_film(tokens: &Vec<String>, scene: &mut Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_film(tokens: &[String], scene: &mut Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("Film: Type of film image not specified!").to_string().into())
+        return Err("Film: Type of film image not specified!".into())
     }
     if tokens[1] != "image" {
-        return Err(format!("Film: Type 'image' expected, got {}", tokens[1]).to_string().into())
+        return Err(format!("Film: Type 'image' expected, got {}", tokens[1]).into())
     }
     let filename = find_value("string filename", &tokens[2..], "output.png".to_string(), "Film::filename - ")?;
     let xres = find_value("integer xresolution", &tokens[2..], 200, "Film::xresolution - ")?;
@@ -530,9 +528,9 @@ fn process_film(tokens: &Vec<String>, scene: &mut Scene, _state: &ParseState) ->
     Ok(())
 }
 
-fn process_sampler(tokens: &Vec<String>, scene: &mut Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_sampler(tokens: &[String], scene: &mut Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("Sampler: Type of sampler not specified!").to_string().into())
+        return Err("Sampler: Type of sampler not specified!".into())
     }
 
     let n_samples = find_value("integer pixelsamples", &tokens[2..], 16, "Sampler::pixelsamples - ")?;
@@ -545,67 +543,67 @@ fn process_sampler(tokens: &Vec<String>, scene: &mut Scene, _state: &ParseState)
     Ok(())
 }
 
-fn process_pixel_filter(_tokens: &Vec<String>, _scene: &Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_pixel_filter(_tokens: &[String], _scene: &Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process_world_begin(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_world_begin(_tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     state.set_matrix(Matrix4x4::identity());
     state.set_in_general_section(false);
     Ok(())
 }
 
-fn process_world_end(_tokens: &Vec<String>, _scene: &Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
+fn process_world_end(_tokens: &[String], _scene: &Scene, _state: &ParseState) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process_attribute_begin(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_attribute_begin(_tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     state.push_state();
     Ok(())
 }
 
-fn process_attribute_end(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_attribute_end(_tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     state.pop_state();
     Ok(())
 }
 
-fn process_light_source(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_light_source(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("Light: Type of light not specified!").to_string().into())
+        return Err("Light: Type of light not specified!".into())
     }
     match &tokens[1] as &str {
         "point" => process_point_light(tokens, scene, state)?,
         "distant" => process_distant_light(tokens, scene, state)?,
-        _=> return Err(format!("Unsupported light type {}", tokens[1]).to_string().into())
+        _=> return Err(format!("Unsupported light type {}", tokens[1]).into())
     }
     Ok(())
 }
 
-fn process_area_light_source(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_area_light_source(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("AreaLight: Type of area light not specified!").to_string().into())
+        return Err("AreaLight: Type of area light not specified!".into())
     }
     match &tokens[1] as &str {
         "diffuse" => process_diffuse_area_light(tokens, scene, state)?,
-        _=> return Err(format!("Unsupported area light type {}", tokens[1]).to_string().into())
+        _=> return Err(format!("Unsupported area light type {}", tokens[1]).into())
     }
     Ok(())
 }
 
-fn process_texture(_tokens: &Vec<String>, _scene: &Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_texture(_tokens: &[String], _scene: &Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_material(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("Material: Type of material not specified!").to_string().into())
+        return Err("Material: Type of material not specified!".into())
     }
-    return process_material_types(tokens, scene, state, &tokens[1] as &str, "");
+    process_material_types(tokens, scene, state, &tokens[1] as &str, "")
 }
 
-fn process_make_named_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_make_named_material(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 4 {
-        return Err(format!("MakeNamedMaterial: At least 4 token required!").to_string().into())
+        return Err("MakeNamedMaterial: At least 4 token required!".into())
     }
     let mat_name = &tokens[1].to_string();
     let mat_type = find_value("string type", tokens, "Unknown".to_string(), "MakeNamedMaterial:type - ")?;
@@ -614,27 +612,27 @@ fn process_make_named_material(tokens: &Vec<String>, scene: &mut Scene, state: &
     return process_material_types(&tokens, scene, state, mat_type.as_str(), mat_name);
 }
 
-fn process_named_material(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_named_material(tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("NamedMaterial: At least 2 token required!").to_string().into())
+        return Err("NamedMaterial: At least 2 token required!".into())
     }
     let id = state.get_named_material(&tokens[1]);
     state.set_material(id);
     Ok(())
 }
 
-fn process_material_types(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_type: &str, mat_name: &str) -> Result<(), Box<dyn Error>> {
+fn process_material_types(tokens: &[String], scene: &mut Scene, state: &mut ParseState, mat_type: &str, mat_name: &str) -> Result<(), Box<dyn Error>> {
     match mat_type {
         "matte" => process_matte_material(tokens, scene, state, mat_name)?,
         "phong" => process_phong_material(tokens, scene, state, mat_name)?,
         "ward" => process_ward_material(tokens, scene, state, mat_name)?,
         "metal" => process_metal_material(tokens, scene, state, mat_name)?,
-        _=> return Err(format!("Unsupported material type {}", mat_type).to_string().into())
+        _=> return Err(format!("Unsupported material type {}", mat_type).into())
     }
     Ok(())
 }
 
-fn process_point_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_point_light(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     let intensity = find_spectrum("I", &tokens[2..], f32x3(1.0, 1.0, 1.0), "Light:point:I - ")?;
     let scale = find_spectrum("scale", &tokens[2..], f32x3(1.0, 1.0, 1.0), "Light:point:scale - ")?;
     let intensity = intensity.mul(scale);
@@ -646,7 +644,7 @@ fn process_point_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut Pars
     Ok(())
 }
 
-fn process_distant_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_distant_light(tokens: &[String], scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     let intensity = find_spectrum("L", &tokens[2..], f32x3(1.0, 1.0, 1.0), "Light:distant:L - ")?;
     let scale = find_spectrum("scale", &tokens[2..], f32x3(1.0, 1.0, 1.0), "Light:distant:scale - ")?;
     let intensity = intensity.mul(scale);
@@ -666,7 +664,7 @@ fn process_distant_light(tokens: &Vec<String>, scene: &mut Scene, state: &mut Pa
     Ok(())
 }
 
-fn process_diffuse_area_light(tokens: &Vec<String>, _scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_diffuse_area_light(tokens: &[String], _scene: &mut Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     let radiance = find_spectrum("L", &tokens[2..], f32x3(1.0, 1.0, 1.0), "AreaLight:diffuse:L - ")?;
     state.set_area_light_info("diffuse".to_string(), radiance);
     Ok(())
@@ -681,13 +679,13 @@ fn add_diffuse_area_light(shape_type: ShapeType, shape_id: u32, scene: &mut Scen
     Ok(())
 }
 
-fn process_accelerator(_tokens: &Vec<String>, _scene: &Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_accelerator(_tokens: &[String], _scene: &Scene, _state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process_scale_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_scale_transform(tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() != 4 {
-        return Err(format!("Scale Transform: Exactly 3 values expected!").to_string().into())
+        return Err("Scale Transform: Exactly 3 values expected!".to_string().into())
     }
     let scale = parse_f32x3(&tokens[1], &tokens[2], &tokens[3], "Transform:scale ")?;
     let matrix = state.cur_matrix() * Matrix4x4::scale(scale.0, scale.1, scale.2);
@@ -695,9 +693,9 @@ fn process_scale_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut Par
     Ok(())
 }
 
-fn process_translate_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_translate_transform(tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() != 4 {
-        return Err(format!("Translate Transform: Exactly 3 values expected!").to_string().into())
+        return Err("Translate Transform: Exactly 3 values expected!".to_string().into())
     }
     let delta = parse_f32x3(&tokens[1], &tokens[2], &tokens[3], "Transform:translate ")?;
     let matrix = state.cur_matrix() * Matrix4x4::translate(delta.0, delta.1, delta.2);
@@ -705,9 +703,9 @@ fn process_translate_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut
     Ok(())
 }
 
-fn process_rotate_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_rotate_transform(tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     if tokens.len() != 5 {
-        return Err(format!("Rotate Transform: Exactly 4 values expected!").to_string().into())
+        return Err("Rotate Transform: Exactly 4 values expected!".to_string().into())
     }
     let err_msg = "Rotate Transform: ";
     let angle = parse_f32(&tokens[1], err_msg)?;
@@ -719,15 +717,15 @@ fn process_rotate_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut Pa
     Ok(())
 }
 
-fn process_identity_transform(_tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_identity_transform(_tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     state.set_matrix(Matrix4x4::identity());
     Ok(())
 }
 
-fn process_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_transform(tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     let values = extract_f32_values(&tokens[1..], "Transform: ")?;
     if values.len() != 16 {
-        return Err(format!("Transform: Exactly 16 values expected!").to_string().into())
+        return Err("Transform: Exactly 16 values expected!".to_string().into())
     }
     let matrix: [f32; 16] = [values[0], values[4], values[8],  values[12],
                              values[1], values[5], values[9],  values[13],
@@ -737,10 +735,10 @@ fn process_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseStat
     Ok(())
 }
 
-fn process_concat_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
+fn process_concat_transform(tokens: &[String], _scene: &Scene, state: &mut ParseState) -> Result<(), Box<dyn Error>> {
     let values = extract_f32_values(&tokens[1..], "ConcatTransform: ")?;
     if values.len() != 16 {
-        return Err(format!("ConcatTransform: Exactly 16 values expected!").to_string().into())
+        return Err("ConcatTransform: Exactly 16 values expected!".to_string().into())
     }
     let matrix: [f32; 16] = [values[0], values[4], values[8],  values[12],
                              values[1], values[5], values[9],  values[13],
@@ -751,7 +749,7 @@ fn process_concat_transform(tokens: &Vec<String>, _scene: &Scene, state: &mut Pa
     Ok(())
 }
 
-fn process_matte_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+fn process_matte_material(tokens: &[String], scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
     let spec = find_spectrum("Kd", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:mate:Kd - ")?;
     let roughness = find_value("float sigma", &tokens[2..], 0.0, "Material:mate:sigma - ")?;
     let mat = Material::Matte(MatteMaterial::new(spec, roughness));
@@ -760,7 +758,7 @@ fn process_matte_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut P
     Ok(())
 }
 
-fn process_phong_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+fn process_phong_material(tokens: &[String], scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
     let kd = find_spectrum("Kd", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:phong:Kd - ")?;
     let ks = find_spectrum("Ks", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:phong:Ks - ")?;
     let shininess = find_value("float shininess", &tokens[2..], 10.0, "Material:mate:shininess - ")?;
@@ -770,7 +768,7 @@ fn process_phong_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut P
     Ok(())
 }
 
-fn process_ward_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+fn process_ward_material(tokens: &[String], scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
     let kd = find_spectrum("Kd", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:ward:Kd - ")?;
     let ks = find_spectrum("Ks", &tokens[2..], f32x3(0.5, 0.5, 0.5), "Material:ward:Ks - ")?;
     let ax = find_value("float ax", &tokens[2..], 0.15, "Material:ward:ax - ")?;
@@ -781,7 +779,7 @@ fn process_ward_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut Pa
     Ok(())
 }
 
-fn process_metal_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
+fn process_metal_material(tokens: &[String], scene: &mut Scene, state: &mut ParseState, mat_name: &str) -> Result<(), Box<dyn Error>> {
     let mut alpha = find_value("float roughness", &tokens[2..], 0.01, "Material:Conductor:roughness - ")?;
     if has_parameter("bool remaproughness", tokens) {
         let value = find_value("bool remaproughness", &tokens[2..], "".to_string(), "Material:Conductor::remaproughness - ")?;
@@ -816,7 +814,7 @@ fn process_metal_material(tokens: &Vec<String>, scene: &mut Scene, state: &mut P
 }
 
 fn add_material_to_state(material_id: u32, mat_name: &str, state: &mut ParseState) {
-    if mat_name != "" {
+    if !mat_name.is_empty() {
         state.add_named_material(mat_name.to_string(), material_id);
     } else {
         state.set_material(material_id);
@@ -831,7 +829,7 @@ fn find_spectrum(pname: &str, tokens: &[String], default: f32x3, err_msg: &str) 
 }
 
 fn find_rgb(pname: &str, tokens: &[String], default: f32x3, err_msg: &str) -> Result<f32x3, Box<dyn Error>> {
-    return find_f32x3(pname, tokens, default, err_msg);
+    find_f32x3(pname, tokens, default, err_msg)
 }
 
 fn find_f32x3(pname: &str, tokens: &[String], default: f32x3, err_msg: &str) -> Result<f32x3, Box<dyn Error>> {
@@ -841,15 +839,15 @@ fn find_f32x3(pname: &str, tokens: &[String], default: f32x3, err_msg: &str) -> 
     };
 
     if tokens[offset..].len() < 6 {
-        return Err(format!("{} - {} Insufficient number of tokens!", err_msg, pname).to_string().into())
+        return Err(format!("{} - {} Insufficient number of tokens!", err_msg, pname).into())
     }
 
     if tokens[offset + 1] != "[" {
-        return Err(format!("{} {} token '[' is expected, got {}", err_msg, pname, tokens[1]).to_string().into())
+        return Err(format!("{} {} token '[' is expected, got {}", err_msg, pname, tokens[1]).into())
     }
 
     if tokens[offset + 5] != "]" {
-        return Err(format!("{} {} token ']' is expected, got {}", err_msg, pname, tokens[5]).to_string().into())
+        return Err(format!("{} {} token ']' is expected, got {}", err_msg, pname, tokens[5]).into())
     }
 
     parse_f32x3(&tokens[offset + 2], &tokens[offset + 3], &tokens[offset + 4], &format!("{} {} ", err_msg, pname))   
@@ -857,13 +855,13 @@ fn find_f32x3(pname: &str, tokens: &[String], default: f32x3, err_msg: &str) -> 
 
 fn extract_f32_values(tokens: &[String], err_msg: &str) -> Result<Vec<f32>,  Box<dyn Error>> {
     if tokens.len() < 2 {
-        return Err(format!("{} Insufficient number of tokens!", err_msg).to_string().into())
+        return Err(format!("{} Insufficient number of tokens!", err_msg).into())
     }
     if tokens[0] != "[" {
-        return Err(format!("{} '[' token expected!", err_msg).to_string().into())
+        return Err(format!("{} '[' token expected!", err_msg).into())
     }
     if tokens[tokens.len()-1] != "]" {
-        return Err(format!("{} ']' token expected!", err_msg).to_string().into())
+        return Err(format!("{} ']' token expected!", err_msg).into())
     }
     
     let mut v: Vec<f32> = Vec::new();
@@ -875,7 +873,7 @@ fn extract_f32_values(tokens: &[String], err_msg: &str) -> Result<Vec<f32>,  Box
     Ok(v)
 }
 
-fn parse_f32x3(v0: &String, v1: &String, v2: &String, err_msg: &str) -> Result<f32x3,  Box<dyn Error>> {
+fn parse_f32x3(v0: &str, v1: &str, v2: &str, err_msg: &str) -> Result<f32x3,  Box<dyn Error>> {
     let v0 = parse_f32(v0, err_msg)?;
     let v1 = parse_f32(v1, err_msg)?;
     let v2 = parse_f32(v2, err_msg)?;
@@ -884,25 +882,22 @@ fn parse_f32x3(v0: &String, v1: &String, v2: &String, err_msg: &str) -> Result<f
 
 fn parse_f32(val: &str, err_msg: &str) ->Result<f32,  Box<dyn Error>> {
     let val: f32 = match val.trim().parse() {
-        Err(e) => return Err(format!("{} Parsing '{}':{}", err_msg, val, e).to_string().into()),
+        Err(e) => return Err(format!("{} Parsing '{}':{}", err_msg, val, e).into()),
         Ok(val) => val
     };
-    return Ok(val);   
+    Ok(val)   
 }
 
 fn parse_u32(val: &str, err_msg: &str) ->Result<u32,  Box<dyn Error>> {
     let val: u32 = match val.trim().parse() {
-        Err(e) => return Err(format!("{} Parsing '{}':{}", err_msg, val, e).to_string().into()),
+        Err(e) => return Err(format!("{} Parsing '{}':{}", err_msg, val, e).into()),
         Ok(val) => val
     };
-    return Ok(val);   
+    Ok(val)   
 }
 
 fn has_parameter(pname: &str, tokens: &[String]) -> bool {
-    match tokens.iter().find(|&token| token == pname) {
-        None => return false,
-        Some(_) => return true,
-    }
+    tokens.iter().any(|token| token == pname)
 }
 
 fn find_value<T>(pname: &str, tokens: &[String], default: T, err_msg: &str) -> Result<T, Box<dyn Error>> 
@@ -914,25 +909,25 @@ where T: FromStr, <T as FromStr>::Err: Display
     };
 
     let mut result = match tokens.get(offset + 1) {
-        None => return Err(format!("{} Value expected for {}", err_msg, pname).to_string().into()),
+        None => return Err(format!("{} Value expected for {}", err_msg, pname).into()),
         Some(result) => result
     };
     if result == "[" {
         result = match tokens.get(offset + 2) {
-            None => return Err(format!("{} Value expected for {}", err_msg, pname).to_string().into()),
+            None => return Err(format!("{} Value expected for {}", err_msg, pname).into()),
             Some(result) => result
         };
 
         let _close = match tokens.get(offset + 3) {
-            None => return Err(format!("{} ']' expected for '{}'", err_msg, pname).to_string().into()),
+            None => return Err(format!("{} ']' expected for '{}'", err_msg, pname).into()),
             Some(val) => val
         };
     }
     let val: T = match result.trim().parse() {
-        Err(e) => return Err(format!("{} Parsing:{}", err_msg, e).to_string().into()),
+        Err(e) => return Err(format!("{} Parsing:{}", err_msg, e).into()),
         Ok(val) => val
     };
-    return Ok(val);
+    Ok(val)
 }
 
 struct PBRTTokenizer<'a> {
@@ -1002,7 +997,7 @@ fn find_offsets(text: &str) -> (usize, usize) {
             }
         }              
     }
-    return (start_offset as usize, end_offset as usize)
+    (start_offset as usize, end_offset as usize)
 }
 
 impl<'a> Iterator for PBRTTokenizer<'a> {
@@ -1024,7 +1019,7 @@ impl<'a> Iterator for PBRTTokenizer<'a> {
             }
         }
         else {
-            return None;
+            None
         }
     }
 }

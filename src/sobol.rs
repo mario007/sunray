@@ -37,7 +37,7 @@ impl SobolSequences {
                 result ^= self.matrices[i as usize];
             }
 
-            index = index >> 1;
+            index >>= 1;
             i+=1;
         };
         result

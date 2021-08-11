@@ -175,12 +175,12 @@ impl ShapeIntersect for Mesh {
 impl CalculateNormal for Mesh {
     fn calculate_normal(&self, hitpoint: f32x3, sub_shape: usize) -> f32x3 {
         let (v1, v2, v3) = self.get_vertices(sub_shape);
-        if self.vertex_normals.len() > 0 {
+        if !self.vertex_normals.is_empty() {
             let (u, v, w) = math::barycentric(hitpoint, v1, v2, v3);
             let (n1, n2, n3) = self.get_normals(sub_shape);
-            return (u * n1 + v * n2 + w * n3).normalize();
+            (u * n1 + v * n2 + w * n3).normalize()
         } else { 
-            return (v2 - v1).cross(v3 - v1).normalize();
+            (v2 - v1).cross(v3 - v1).normalize()
         }
     }
 }
@@ -201,7 +201,7 @@ impl PrimitiveIntersect for Mesh {
         if t > min_dist as f64 {
             return (0.0, -1);
         }
-        return (t as f32, -1)
+        (t as f32, -1)
     }
 }
 
@@ -385,14 +385,13 @@ impl<T> Shapes<T> {
         if normal.dot(ray.direction * -1.0) < 0.0 {
             normal = normal * -1.0;
         }
-        let material_id = *&self.shapes[index].material_id;
+        let material_id = self.shapes[index].material_id;
         let light_id = self.area_lights_mapping[index];
-        let isect_point = IsectPoint::new(hitpoint, normal, min_dist, material_id, shape_type, index, sub_shape, light_id);
-        return isect_point;
+        IsectPoint::new(hitpoint, normal, min_dist, material_id, shape_type, index, sub_shape, light_id)
     }
 
     pub fn material(&self, index: usize) -> u32 {
-        *&self.shapes[index].material_id
+        self.shapes[index].material_id
     }
 
     pub fn precompute(&mut self) where T: Precompute {

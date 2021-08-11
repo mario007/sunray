@@ -14,9 +14,9 @@ pub struct ColorBufferRGB {
 
 impl ColorBufferRGB {
     pub fn new(width: usize, height: usize) -> ColorBufferRGB {
-        ColorBufferRGB { width: width,
-                         height: height,
-                         pixels: vec![0; width*height*3]
+        ColorBufferRGB { width,
+                         height,
+                         pixels: vec![0; width * height * 3]
         }
     }
     
@@ -73,9 +73,9 @@ pub struct ColorBuffer {
 
 impl ColorBuffer {
     pub fn new(width: usize, height: usize) -> ColorBuffer {
-        ColorBuffer{ width: width,
-                     height: height,
-                     pixels: vec![0.0; width*height*4]
+        ColorBuffer{ width,
+                     height,
+                     pixels: vec![0.0; width * height * 4]
         }
     }
 
@@ -112,19 +112,37 @@ impl ColorBuffer {
             for x in 0..self.width {
                 let (r, g, b) = self.get_color(x, y);
                 let (mut r, mut g, mut b) = tone_map(&tmo_type, r, g, b); 
-                r = r * 256.0;
-                g = g * 256.0;
-                b = b * 256.0;
+                r *= 256.0;
+                g *= 256.0;
+                b *= 256.0;
                 buf.set_color(x, y, r as u8, g as u8, b as u8);
             }
         }
-        return buf;
+        buf
+    }
+
+    pub fn to_rgb_vector(&self, tmo_type: TMOType) -> Vec<u32> {
+        let mut buffer: Vec<u32> = vec![0; self.width * self.height];
+
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let (r, g, b) = self.get_color(x, y);
+                let (mut r, mut g, mut b) = tone_map(&tmo_type, r, g, b);
+                r *= 256.0;
+                g *= 256.0;
+                b *= 256.0;
+                let (r, g, b) = (r as u8, g as u8, b as u8);
+                let color = ((r as u32) << 16) | ((g as u32) << 8) | b as u32;
+                buffer[y * self.width + x] = color;
+            }
+        }
+        buffer
     }
 
     pub fn save<P: AsRef<Path>>(&self, path: P, tmo_type: TMOType) -> Result<(), Box<dyn Error>> {
         let ext = Path::new(path.as_ref()).extension();
         match ext {
-            None => Err(format!("There is no filename or embedded .").to_string().into()),
+            None => Err("There is no filename or embedded .".into()),
             Some(os_str) => match os_str.to_str() {
                 Some("pfm") => self.save_as_pfm(path),
                 Some("hdr") => self.save_as_hdr(path),

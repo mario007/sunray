@@ -32,7 +32,7 @@ fn main() {
     println!("Prepare phase is finished - Time: {} seconds", prep_time.as_secs_f64());
     println!("Rendering...");
     let stop_watch = Instant::now();
-    while ren.render() == false {
+    while !ren.render() {
         println!("Rendering {} pass: Time: {}", ren.rendering_pass, stop_watch.elapsed().as_secs_f64());
     }
     let rendering_time = stop_watch.elapsed();
