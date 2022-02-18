@@ -9,6 +9,10 @@ pub struct Matrix4x4 {
 
 impl Matrix4x4 {
     pub fn new() -> Matrix4x4 {
+        Matrix4x4::identity()
+    }
+
+    pub fn identity() -> Matrix4x4 {
         Matrix4x4 {
             m: [
                 [1.0, 0.0, 0.0, 0.0],
@@ -17,10 +21,6 @@ impl Matrix4x4 {
                 [0.0, 0.0, 0.0, 1.0],
             ]
         }
-    }
-
-    pub fn identity() -> Matrix4x4 {
-        Matrix4x4::new()
     }
 
     #[allow(clippy::float_cmp)]
