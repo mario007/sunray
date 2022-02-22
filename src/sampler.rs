@@ -126,19 +126,19 @@ impl PathSampler {
 mod tests {
 
     use super::*;
-    use crate::buffers::ColorBufferRGB;
+    use crate::buffers::{ColorBufferRGBA, Color};
 
     #[test]
     fn sampling_pixels() {
         let mut sampler = PathSampler::new(SamplerType::Sobol, 4, 4, 4, 10_000_000);
-        let mut col_buffer = ColorBufferRGB::new(512, 512);
+        let mut col_buffer = ColorBufferRGBA::new(512, 512);
         for pass in 0..16 {
             for j in 0..16 {
                 for i in 0..16 {
                     let (x, y) = sampler.sample_pixel(i, j, pass);
                     let xi = i * 32 + (x * 32.0) as u32;
                     let yi = j * 32 + (y * 32.0) as u32;
-                    col_buffer.set_color(xi as usize, yi as usize, 255, 0, 0);
+                    col_buffer.set_color(xi as usize, yi as usize, &Color{red: 255, green: 0, blue: 0});
                     //println!("x:{} y:{} = {}  {}", i, j, x, y);
                 }
             }

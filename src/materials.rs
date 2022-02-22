@@ -234,3 +234,49 @@ impl Material {
         }
     }
 }
+
+pub trait SurfaceMaterial {
+    fn eval(&self, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32);
+    fn sample(&self, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample;
+}
+
+impl SurfaceMaterial for MatteMaterial {
+    fn eval(&self, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32) {
+        self.eval(wo, normal, wi)
+    }
+
+    fn sample(&self, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample{
+        self.sample(wo, normal, path_sampler)
+    }
+}
+
+
+impl SurfaceMaterial for PhongMaterial {
+    fn eval(&self, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32) {
+        self.eval(wo, normal, wi)
+    }
+
+    fn sample(&self, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample{
+        self.sample(wo, normal, path_sampler)
+    }
+}
+
+impl SurfaceMaterial for WardMaterial {
+    fn eval(&self, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32) {
+        self.eval(wo, normal, wi)
+    }
+
+    fn sample(&self, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample{
+        self.sample(wo, normal, path_sampler)
+    }
+}
+
+impl SurfaceMaterial for MetalMaterial {
+    fn eval(&self, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32) {
+        self.eval(wo, normal, wi)
+    }
+
+    fn sample(&self, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample{
+        self.sample(wo, normal, path_sampler)
+    }
+}

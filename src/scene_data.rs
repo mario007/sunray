@@ -1,6 +1,6 @@
 use crate::vec::f32x3;
 use crate::shapes::{Sphere, Shapes, ShapeInstance, TransformShape, Mesh, ShapeType, IsectPoint, triangle_pos_and_pdf, triangle_pdf};
-use crate::materials::{Material, MaterialSample};
+use crate::materials::{Material, MaterialSample, SurfaceMaterial};
 use crate::isects::{CollectionIntersect, NPrimitives, CalculateNormal, AABB, BBox};
 use crate::ray::Ray;
 use crate::lights::{Light, LightSample};
@@ -25,6 +25,7 @@ impl ShapeSample {
 pub struct SceneData {
 
     pub materials: Vec<Material>,
+    pub dyn_materials: Vec<Box<dyn SurfaceMaterial + Send + Sync>>,
     pub lights: Vec<Light>,
 
     pub spheres: Shapes<Sphere>,
@@ -39,6 +40,7 @@ impl SceneData {
     pub fn new() -> Self {
         Self {
             materials: Vec::new(),
+            dyn_materials: Vec::new(),
             lights: Vec::new(),
 
             spheres: Shapes::new(),
@@ -55,8 +57,10 @@ impl SceneData {
         id as u32
     }
 
-    pub fn material(&self, material_id: u32) -> &Material {
-        &self.materials[material_id as usize]
+    pub fn add_dyn_material(&mut self, mat: Box<dyn SurfaceMaterial + Send + Sync>) -> u32 {
+        let id = self.dyn_materials.len();
+        self.dyn_materials.push(mat);
+        id as u32
     }
 
     pub fn add_light(&mut self, light: Light) -> u32 {
@@ -293,11 +297,18 @@ impl SceneData {
     pub fn material_eval(&self, material_id: u32, wo: f32x3, normal: f32x3, wi: f32x3) -> (f32x3, f32) {
         let mat = &self.materials[material_id as usize];
         mat.eval(wo, normal, wi)
+
+        // let mat = &self.dyn_materials[material_id as usize];
+        // mat.eval(wo, normal, wi)
+
     }
 
     pub fn material_sample(&self, material_id: u32, wo: f32x3, normal: f32x3, path_sampler: &mut PathSampler) -> MaterialSample {
         let mat = &self.materials[material_id as usize];
         mat.sample(wo, normal, path_sampler)
+
+        // let mat = &self.dyn_materials[material_id as usize];
+        // mat.sample(wo, normal, path_sampler)
     }
 
     pub fn set_area_light(&mut self, shape_type: &ShapeType, shape_id: u32, light_id: i32) {

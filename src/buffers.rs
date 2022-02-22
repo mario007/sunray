@@ -6,35 +6,39 @@ use std::io::BufWriter;
 use std::io::Write;
 
 
-pub struct ColorBufferRGB {
-    width: usize,
-    height: usize,
-    pixels: Vec<u8>,
+#[derive(Debug, Copy, Clone)]
+pub struct Color {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8
 }
 
-impl ColorBufferRGB {
-    pub fn new(width: usize, height: usize) -> ColorBufferRGB {
-        ColorBufferRGB { width,
+pub struct ColorBufferRGBA {
+    width: usize,
+    height: usize,
+    pixels: Vec<Color>,
+}
+
+impl ColorBufferRGBA {
+    pub fn new(width: usize, height: usize) -> ColorBufferRGBA {
+        ColorBufferRGBA {width,
                          height,
-                         pixels: vec![0; width * height * 3]
+                         pixels: vec![Color{red:0, green:0, blue:0}; width * height]
         }
     }
     
-    pub fn get_color(&self, x: usize, y: usize) -> (u8, u8, u8) {
-       let index = y * self.width * 3 + x * 3;
-       (self.pixels[index], self.pixels[index+1], self.pixels[index+2])
+    pub fn get_color(&self, x: usize, y: usize) -> Color {
+        return self.pixels[y * self.width + x]
     }
     
-    pub fn set_color(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
-        let index = y * self.width * 3 + x * 3;
-        self.pixels[index] = r;
-        self.pixels[index + 1] = g;
-        self.pixels[index + 2] = b;
+    pub fn set_color(&mut self, x: usize, y: usize, rgba: &Color) {
+        self.pixels[y * self.width + x] = *rgba;
     }
 
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn Error>> {
+        let output: Vec<u8> = self.pixels.iter().flat_map(|val| [val.red, val.green, val.blue]).collect();
         let result = image::save_buffer(path,
-                                        &self.pixels[0..self.pixels.len()],
+                                        &output[0..output.len()],
                                         self.width as u32,
                                         self.height as u32,
                                         image::ColorType::Rgb8);
@@ -105,8 +109,8 @@ impl ColorBuffer {
         self.pixels[index + 3] += weight;
     }
 
-    pub fn to_rgb(&self, tmo_type: TMOType) -> ColorBufferRGB {
-        let mut buf = ColorBufferRGB::new(self.width, self.height);
+    pub fn to_rgb(&self, tmo_type: TMOType) -> ColorBufferRGBA {
+        let mut buf = ColorBufferRGBA::new(self.width, self.height);
 
         for y in 0..self.height {
             for x in 0..self.width {
@@ -115,7 +119,7 @@ impl ColorBuffer {
                 r *= 256.0;
                 g *= 256.0;
                 b *= 256.0;
-                buf.set_color(x, y, r as u8, g as u8, b as u8);
+                buf.set_color(x, y, &Color{red: r as u8, green: g as u8, blue: b as u8});
             }
         }
         buf

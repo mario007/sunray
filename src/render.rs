@@ -24,14 +24,13 @@ pub fn radiance_direct_lgt (ray: &Ray, scene_data: &SceneData, path_sampler: &mu
     };
 
     let wo = -ray.direction;
-    let mat = scene_data.material(isect_p.material_id);
     let mut acum = f32x3(0.0, 0.0, 0.0);
 
     for light_id in 0..scene_data.lights.len() {
         let ls = scene_data.light_sample_li(light_id, &isect_p, path_sampler);
         if scene_data.visible(isect_p.position, ls.position) {
             let wi = (ls.position - isect_p.position).normalize();
-            let (mat_spectrum, _pdfw) = mat.eval(wo, isect_p.normal, wi);
+            let (mat_spectrum, _pdfw) = scene_data.material_eval(isect_p.material_id, wo, isect_p.normal, wi);
             let cosa = isect_p.normal.dot(wi).abs();
             let dist = math::distance(isect_p.position, ls.position);
             let pdf = sampling::pdfa_to_w(ls.pdfa, dist, ls.cos_theta);

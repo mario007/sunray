@@ -754,6 +754,7 @@ fn process_matte_material(tokens: &[String], scene: &mut Scene, state: &mut Pars
     let roughness = find_value("float sigma", &tokens[2..], 0.0, "Material:mate:sigma - ")?;
     let mat = Material::Matte(MatteMaterial::new(spec, roughness));
     let id = scene.add_material(mat);
+    scene.add_dyn_material(Box::new(MatteMaterial::new(spec, roughness)));
     add_material_to_state(id, mat_name, state);
     Ok(())
 }
@@ -764,6 +765,7 @@ fn process_phong_material(tokens: &[String], scene: &mut Scene, state: &mut Pars
     let shininess = find_value("float shininess", &tokens[2..], 10.0, "Material:mate:shininess - ")?;
     let mat = Material::Phong(PhongMaterial::new(kd, ks, shininess));
     let id = scene.add_material(mat);
+    scene.add_dyn_material(Box::new(PhongMaterial::new(kd, ks, shininess)));
     add_material_to_state(id, mat_name, state);
     Ok(())
 }
@@ -775,6 +777,7 @@ fn process_ward_material(tokens: &[String], scene: &mut Scene, state: &mut Parse
     let ay = find_value("float ay", &tokens[2..], 0.15, "Material:ward:ay - ")?;
     let mat = Material::Ward(WardMaterial::new(kd, ks, ax, ay));
     let id = scene.add_material(mat);
+    scene.add_dyn_material(Box::new(WardMaterial::new(kd, ks, ax, ay)));
     add_material_to_state(id, mat_name, state);
     Ok(())
 }
@@ -790,24 +793,30 @@ fn process_metal_material(tokens: &[String], scene: &mut Scene, state: &mut Pars
         alpha = bsdf::ggx_and_beckmann_roughness_to_alpha(alpha);
     }
     let con_params: ConductorParams;
+    let con_params2: ConductorParams;
     // NOTE copper is default metal material
     if has_parameter("rgb F0", tokens) {
         let f0 = find_spectrum("F0", &tokens[2..], f32x3(0.955, 0.638, 0.538), "Material:Metal:F0 - ")?;
         con_params = ConductorParams::F0(f0);
+        con_params2 = ConductorParams::F0(f0);
     } else {
         let eta = find_spectrum("eta", &tokens[2..], f32x3(0.21258, 0.8231, 1.2438), "Material:Metal:eta - ")?;
         let k = find_spectrum("k", &tokens[2..], f32x3(4.1003, 2.4763, 2.288), "Material:Metal:k - ")?;
         con_params = ConductorParams::IOR(eta, k);
+        con_params2 = ConductorParams::IOR(eta, k);
     }
     let mut dist = MicrofacetDistType::GGX;
+    let mut dist2 = MicrofacetDistType::GGX;
     if has_parameter("string distribution", tokens) {
         let value = find_value("string distribution", &tokens[2..], "ggx".to_string(), "Material:Conductor::distribution - ")?;
         if value == "beckmann" {
             dist = MicrofacetDistType::Beckmann;
+            dist2 = MicrofacetDistType::Beckmann;
         } 
     }
 
     let mat = Material::Metal(MetalMaterial::new(con_params, alpha, dist));
+    scene.add_dyn_material(Box::new(MetalMaterial::new(con_params2, alpha, dist2)));
     let id = scene.add_material(mat);
     add_material_to_state(id, mat_name, state);
     Ok(())

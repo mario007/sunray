@@ -5,7 +5,7 @@ use crate::camera::{Camera, PerspectiveCamera};
 use crate::sampler::SamplerType;
 use crate::buffers::ColorBuffer;
 use crate::shapes::{Sphere, ShapeInstance, TransformShape, Mesh, ShapeType};
-use crate::materials::Material;
+use crate::materials::{Material, SurfaceMaterial};
 use crate::lights::Light;
 use crate::scene_data::SceneData;
 
@@ -116,6 +116,11 @@ impl Scene {
     pub fn add_material(&mut self, mat: Material) -> u32 {
         let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
         data.add_material(mat)
+    }
+
+    pub fn add_dyn_material(&mut self, mat: Box<dyn SurfaceMaterial + Send + Sync>) -> u32 {
+        let data = Arc::get_mut(&mut self.scene_data).expect("Scene data cannot be aquired!");
+        data.add_dyn_material(mat)
     }
 
     pub fn add_light(&mut self, light: Light) -> u32 {
